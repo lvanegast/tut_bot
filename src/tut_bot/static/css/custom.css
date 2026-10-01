@@ -1,0 +1,67 @@
+/* Estilos personalizados para tut_bot */
+
+.recording-pulse {
+    animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+@keyframes pulse-ring {
+    0% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 18px rgba(239, 68, 68, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    }
+}
+
+/* Colores de fonemas y palabras según puntuación */
+.score-excellent {
+    color: #15803d;
+    background-color: #dcfce7;
+    border-color: #86efac;
+}
+
+.score-good {
+    color: #b45309;
+    background-color: #fef3c7;
+    border-color: #fcd34d;
+}
+
+.score-poor {
+    color: #b91c1c;
+    background-color: #fee2e2;
+    border-color: #fca5a5;
+}
+
+/* Palabras interactivas */
+.word-pill {
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.word-pill:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Formateo de markdown en la tarjeta de feedback de Gemini */
+.gemini-feedback p {
+    margin-bottom: 0.75rem;
+    line-height: 1.6;
+}
+
+.gemini-feedback strong {
+    color: #1e293b;
+    font-weight: 600;
+}
+
+.gemini-feedback ul {
+    list-style-type: disc;
+    margin-left: 1.25rem;
+    margin-bottom: 0.75rem;
+}
