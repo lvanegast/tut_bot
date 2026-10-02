@@ -1,6 +1,8 @@
+import asyncio
 import logging
 import os
 import tempfile
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -13,14 +15,43 @@ from tut_bot.models.schemas import EvaluationResponse, HealthStatus, TTSRequest
 from tut_bot.services.azure_speech import azure_service
 from tut_bot.services.exercises import get_categories, get_exercises
 from tut_bot.services.gemini_coach import gemini_coach
+from tut_bot.services.telegram_bot import telegram_bot
+from tut_bot.services.tracker import tracker
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("tut_bot")
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Ciclo de vida de la aplicación: inicializa Telegram Bot en segundo plano si está configurado."""
+    polling_task = None
+    if settings.is_telegram_ready:
+        logger.info("Iniciando integración con Telegram Bot...")
+        polling_task = asyncio.create_task(telegram_bot.start_polling())
+    else:
+        logger.info(
+            "Telegram Bot no configurado (TELEGRAM_BOT_TOKEN ausente o vacío). "
+            "Para activarlo, agrega TELEGRAM_BOT_TOKEN a tu archivo .env"
+        )
+
+    yield
+
+    # Limpieza en apagado
+    if polling_task:
+        await telegram_bot.stop()
+        polling_task.cancel()
+        try:
+            await polling_task
+        except asyncio.CancelledError:
+            pass
+
+
 app = FastAPI(
     title="tut_bot - Entrenador Fonético Inteligente",
-    description="Evaluación acústica con Azure Speech SDK (F0) y pedagogía con Google Gemini AI Studio.",
-    version="1.0.0",
+    description="Evaluación acústica con Azure Speech SDK (F0), pedagogía con Google Gemini AI Studio y canal de Telegram.",
+    version="1.1.0",
+    lifespan=lifespan,
 )
 
 # CORS para permitir pruebas desde dispositivos móviles en la misma red Wi-Fi
@@ -39,6 +70,7 @@ def health_check():
         status="running",
         azure_configured=azure_service.is_available(),
         gemini_configured=gemini_coach.is_available(),
+        telegram_configured=telegram_bot.is_configured(),
         mock_mode=settings.is_mock_mode,
     )
 
@@ -57,20 +89,26 @@ def list_categories(language: str = "de-DE"):
     return get_categories(language=language)
 
 
+@app.get("/api/stats")
+def get_user_stats(user_id: str = "web_default"):
+    """Devuelve las estadísticas acumuladas, puntuación promedio y fonemas débiles."""
+    return tracker.get_user_stats(user_id)
+
+
 @app.post("/api/evaluate", response_model=EvaluationResponse)
 async def evaluate_audio(
     audio: UploadFile = File(...),
     reference_text: str = Form(...),
     language: str = Form("de-DE"),
+    user_id: str = Form("web_default"),
 ):
     """
     Recibe el archivo de audio del micrófono y el texto de referencia.
-    Evalúa la pronunciación con Azure y enriquece con feedback de Gemini.
+    Evalúa la pronunciación con Azure, enriquece con feedback de Gemini y persiste en SQLite.
     """
     if not reference_text.strip():
         raise HTTPException(status_code=400, detail="El texto de referencia no puede estar vacío.")
 
-    # Guardar audio temporal para que el SDK de Azure lo procese
     suffix = ".wav"
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
         temp_path = temp_file.name
@@ -94,13 +132,30 @@ async def evaluate_audio(
         )
         eval_result.pedagogical_feedback = pedagogical_feedback
 
+        # 3. Registrar en SQLite para historial pedagógico
+        weak_phonemes = []
+        for w in eval_result.words:
+            for p in w.phonemes:
+                if p.score < 70:
+                    weak_phonemes.append(p.phoneme)
+
+        tracker.record_evaluation(
+            user_id=user_id,
+            language=language,
+            reference_text=reference_text.strip(),
+            overall_score=eval_result.overall_score,
+            accuracy_score=eval_result.accuracy_score,
+            fluency_score=eval_result.fluency_score,
+            prosody_score=eval_result.prosody_score,
+            weak_phonemes=weak_phonemes,
+        )
+
         return eval_result
 
     except Exception as e:
         logger.error(f"Error procesando audio: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        # Eliminar archivo temporal
         if os.path.exists(temp_path):
             try:
                 os.remove(temp_path)

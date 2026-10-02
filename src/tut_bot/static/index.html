@@ -50,6 +50,12 @@
                     <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                     <span id="status-text">Conectando...</span>
                 </div>
+
+                <!-- Badge de Telegram -->
+                <div id="telegram-badge" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200" title="Bot de Telegram para notas de voz">
+                    <span>🤖</span>
+                    <span id="telegram-status-text">Telegram</span>
+                </div>
             </div>
         </div>
     </header>
@@ -229,6 +235,37 @@
                 <button onclick="nextExercise()" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold text-sm text-white transition-all shadow-md shadow-indigo-100">
                     Siguiente Frase ➔
                 </button>
+            </div>
+        </div>
+
+        <!-- Tarjeta de Progreso Acumulado y Fonemas Críticos -->
+        <div id="stats-card" class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-sm space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                <div class="flex items-center gap-2.5">
+                    <span class="text-xl">📈</span>
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900">Tu Progreso Acumulado</h3>
+                        <p class="text-xs text-slate-500">Historial unificado entre la Web y el Bot de Telegram.</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="stats-attempts-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        0 Prácticas
+                    </span>
+                    <span id="stats-avg-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        Promedio: --
+                    </span>
+                </div>
+            </div>
+
+            <!-- Foco en fonemas débiles -->
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                    Fonemas con mayor margen de mejora:
+                </label>
+                <div id="stats-weak-phonemes-container" class="flex flex-wrap gap-2 text-xs">
+                    <span class="text-slate-400 italic">Realiza tu primera práctica para detectar fonemas a reforzar.</span>
+                </div>
             </div>
         </div>
 

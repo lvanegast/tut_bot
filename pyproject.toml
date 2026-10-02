@@ -8,15 +8,19 @@ dependencies = [
     "azure-cognitiveservices-speech>=1.35.0",
     "fastapi>=0.110.0",
     "google-genai>=0.2.0",
+    "imageio-ffmpeg>=0.6.0",
     "pydantic>=2.6.0",
+    "pydub>=0.25.1",
     "python-dotenv>=1.0.1",
     "python-multipart>=0.0.9",
+    "python-telegram-bot>=21.0",
     "requests>=2.31.0",
     "uvicorn[standard]>=0.28.0",
 ]
 
 [project.scripts]
 tut-bot = "tut_bot.main:start"
+tut-bot-telegram = "tut_bot.services.telegram_bot:run_standalone"
 
 [dependency-groups]
 dev = [

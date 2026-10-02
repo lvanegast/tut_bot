@@ -17,12 +17,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     await checkHealth();
     await loadCategories();
     await loadExercises();
+    await loadUserStats();
 });
 
 // Comprobar estado del backend y servicios
 async function checkHealth() {
     const badge = document.getElementById('status-badge');
     const text = document.getElementById('status-text');
+    const tgBadge = document.getElementById('telegram-badge');
+    const tgText = document.getElementById('telegram-status-text');
+
     try {
         const res = await fetch('/api/health');
         const data = await res.json();
@@ -34,6 +38,16 @@ async function checkHealth() {
             badge.className = "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200";
             badge.querySelector('span').className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
             text.textContent = "Azure + Gemini Activos";
+        }
+
+        if (tgBadge && tgText) {
+            if (data.telegram_configured) {
+                tgBadge.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200";
+                tgText.textContent = "Telegram Activo";
+            } else {
+                tgBadge.className = "hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200";
+                tgText.textContent = "Telegram (Configurar)";
+            }
         }
     } catch (e) {
         badge.className = "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200";
@@ -323,6 +337,7 @@ async function submitForEvaluation(wavBlob) {
         const data = await response.json();
         lastEvaluation = data;
         renderResults(data);
+        await loadUserStats();
 
     } catch (err) {
         alert("Error evaluando pronunciación: " + err.message);
@@ -440,3 +455,39 @@ function retryCurrentExercise() {
     document.getElementById('results-card').classList.add('hidden');
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+// Cargar estadísticas acumuladas y fonemas críticos
+async function loadUserStats() {
+    try {
+        const res = await fetch('/api/stats?user_id=web_default');
+        if (!res.ok) return;
+        const stats = await res.json();
+
+        const attemptsBadge = document.getElementById('stats-attempts-badge');
+        const avgBadge = document.getElementById('stats-avg-badge');
+        const weakContainer = document.getElementById('stats-weak-phonemes-container');
+
+        if (attemptsBadge) {
+            attemptsBadge.textContent = `${stats.total_attempts} Práctica${stats.total_attempts === 1 ? '' : 's'}`;
+        }
+        if (avgBadge) {
+            avgBadge.textContent = stats.total_attempts > 0 ? `Promedio: ${Math.round(stats.average_overall)}/100` : 'Promedio: --';
+        }
+
+        if (weakContainer) {
+            if (!stats.weak_phonemes_top || stats.weak_phonemes_top.length === 0) {
+                weakContainer.innerHTML = '<span class="text-slate-400 italic">Sin fonemas críticos detectados aún. ¡Excelente trabajo!</span>';
+            } else {
+                weakContainer.innerHTML = stats.weak_phonemes_top.map(item => `
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 font-semibold text-xs">
+                        <span class="font-mono">/${item.phoneme}/</span>
+                        <span class="bg-rose-200/70 text-rose-900 px-1.5 py-0.5 rounded-md text-[10px] font-bold">${item.count} fallos</span>
+                    </span>
+                `).join('');
+            }
+        }
+    } catch (e) {
+        console.warn("No se pudieron cargar estadísticas:", e);
+    }
+}
+

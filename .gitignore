@@ -7,3 +7,6 @@ venv/
 *.log
 *.wav
 .pytest_cache/
+*.db
+data/*.db
+

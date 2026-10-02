@@ -15,6 +15,9 @@ class Settings:
     HOST: str = os.getenv("HOST", "0.0.0.0")
     PORT: int = int(os.getenv("PORT", "8000"))
 
+    TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    WEB_BASE_URL: str = os.getenv("WEB_BASE_URL", "").strip()
+
     _mock_env = os.getenv("MOCK_MODE", "auto").strip().lower()
 
     @property
@@ -24,6 +27,10 @@ class Settings:
     @property
     def is_gemini_ready(self) -> bool:
         return bool(self.GEMINI_API_KEY and not self.GEMINI_API_KEY.startswith("tu_"))
+
+    @property
+    def is_telegram_ready(self) -> bool:
+        return bool(self.TELEGRAM_BOT_TOKEN and not self.TELEGRAM_BOT_TOKEN.startswith("tu_"))
 
     @property
     def is_mock_mode(self) -> bool:

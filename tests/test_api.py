@@ -89,10 +89,75 @@ def test_evaluate_endpoint_mock_flow():
     print(f"Feedback generado: {data['pedagogical_feedback'][:120]}...")
 
 
+def test_stats_endpoint():
+    res = client.get("/api/stats?user_id=web_default")
+    assert res.status_code == 200
+    stats = res.json()
+    assert "total_attempts" in stats
+    assert "average_overall" in stats
+    assert "weak_phonemes_top" in stats
+    assert "recent_history" in stats
+
+
+def test_audio_converter_pipeline():
+    from tut_bot.services.audio_converter import audio_converter
+
+    dummy_wav = create_dummy_wav()
+    # Convertir WAV a OGG Opus
+    ogg_bytes = audio_converter.wav_to_ogg_opus(dummy_wav)
+    assert ogg_bytes is not None
+    assert len(ogg_bytes) > 0
+
+    # Convertir OGG Opus a WAV 16kHz
+    wav_converted = audio_converter.ogg_to_wav(ogg_bytes)
+    assert wav_converted is not None
+    assert len(wav_converted) > 0
+    assert wav_converted.startswith(b"RIFF")
+
+
+def test_progress_tracker():
+    from tut_bot.services.tracker import tracker
+
+    user_id = "test_unit_user_01"
+    tracker.set_user_language(user_id, "de-DE")
+    tracker.set_user_exercise_index(user_id, 3)
+    state = tracker.get_user_state(user_id)
+    assert state["language"] == "de-DE"
+    assert state["exercise_index"] == 3
+
+    tracker.record_evaluation(
+        user_id=user_id,
+        language="de-DE",
+        reference_text="Ich möchte",
+        overall_score=72.0,
+        accuracy_score=70.0,
+        fluency_score=75.0,
+        prosody_score=71.0,
+        weak_phonemes=["ç", "øː"],
+    )
+
+    stats = tracker.get_user_stats(user_id)
+    assert stats["total_attempts"] >= 1
+    assert any(item["phoneme"] == "ç" for item in stats["weak_phonemes_top"])
+
+
+def test_telegram_bot_service():
+    from tut_bot.services.telegram_bot import TelegramCoachBot
+
+    bot = TelegramCoachBot(token="123456:TEST_TOKEN_DUMMY_FOR_UNIT_TEST")
+    assert bot.is_configured() is True
+    app = bot.build_app()
+    assert app is not None
+
+
 if __name__ == "__main__":
     test_health_endpoint()
     test_exercises_endpoints()
     test_categories_endpoint()
     test_static_index()
     test_evaluate_endpoint_mock_flow()
+    test_stats_endpoint()
+    test_audio_converter_pipeline()
+    test_progress_tracker()
+    test_telegram_bot_service()
     print("\n[EXITO] Todas las pruebas unitarias pasaron correctamente!")

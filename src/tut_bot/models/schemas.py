@@ -51,4 +51,5 @@ class HealthStatus(BaseModel):
     status: str
     azure_configured: bool
     gemini_configured: bool
+    telegram_configured: bool
     mock_mode: bool
