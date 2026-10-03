@@ -30,6 +30,12 @@ class AudioRecorder {
         this.audioContext = new AudioContextClass();
         this.source = this.audioContext.createMediaStreamSource(this.mediaStream);
 
+        // AnalyserNode para visualizador de ondas / espectro en tiempo real
+        this.analyser = this.audioContext.createAnalyser();
+        this.analyser.fftSize = 256;
+        this.analyser.smoothingTimeConstant = 0.8;
+        this.source.connect(this.analyser);
+
         // Buffer size 4096 para procesamiento estable
         this.processor = this.audioContext.createScriptProcessor(4096, 1, 1);
 
@@ -42,6 +48,10 @@ class AudioRecorder {
         this.source.connect(this.processor);
         this.processor.connect(this.audioContext.destination);
         this.isRecording = true;
+    }
+
+    getAnalyser() {
+        return this.analyser;
     }
 
     stop() {

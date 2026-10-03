@@ -39,6 +39,7 @@ class Exercise(BaseModel):
     translation_es: str
     focus_phonemes: List[str] = []
     tip: str
+    articulation_type: Optional[str] = None  # "vowel", "bilabial", "labiodental", "dental", "alveolar", "postalveolar", "palatal", "velar", "uvular", "glottal"
 
 
 class TTSRequest(BaseModel):

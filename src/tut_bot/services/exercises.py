@@ -18,6 +18,7 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="No hablo alemán.",
         focus_phonemes=["ç", "ʃ"],
         tip="El sonido de 'ch' tras 'i/e' (/ç/) es palatal, como un siseo suave con la lengua pegada al paladar medio, nunca una 'k' ni una 'j' áspera española.",
+        articulation_type="palatal",
     ),
     Exercise(
         id="de-phon-02",
@@ -30,6 +31,7 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="El libro está sobre la mesa.",
         focus_phonemes=["x", "ʃ"],
         tip="Tras vocales posteriores (a, o, u), la 'ch' se pronuncia en la parte posterior (velar /x/), similar a la 'j' española suave.",
+        articulation_type="velar",
     ),
     Exercise(
         id="de-phon-03",
@@ -42,7 +44,22 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="Busco un libro sencillo.",
         focus_phonemes=["ç", "x"],
         tip="Observa cómo cambia de /ç/ en 'Ich' a /x/ en 'suche' y 'Buch'.",
+        articulation_type="palatal",
     ),
+    Exercise(
+        id="de-phon-04",
+        language="de-DE",
+        category="ich-Laut vs ach-Laut",
+        level="B1",
+        title="Tríada Fricativa: /ç/ vs /x/ vs /ʃ/",
+        target_text="Ich möchte sechs frische Fische kochen.",
+        ipa="ɪç ˈmœçtə zɛks ˈfʁɪʃə ˈfɪʃə ˈkɔxn̩",
+        translation_es="Quisiera cocinar seis pescados frescos.",
+        focus_phonemes=["ç", "ʃ", "x"],
+        tip="Diferencia con precisión: /ç/ en 'Ich/möchte', /ks/ en 'sechs', /ʃ/ en 'frische/Fische' y /x/ en 'kochen'.",
+        articulation_type="palatal",
+    ),
+
     # 2. Vocales con diéresis (Umlauts: ä, ö, ü)
     Exercise(
         id="de-umlaut-01",
@@ -52,9 +69,10 @@ EXERCISES_DATABASE: List[Exercise] = [
         title="Umlaut Ö (/øː/, /œ/)",
         target_text="Ich möchte ein Brötchen möchten.",
         ipa="ɪç ˈmœçtə aɪn ˈbʁøːtçən",
-        translation_es="Quisiera un pancitoecillo.",
+        translation_es="Quisiera un panecillo.",
         focus_phonemes=["øː", "œ", "ç"],
         tip="Para pronunciar 'ö', coloca la boca en posición de decir 'o' (labios redondeados), pero intenta emitir una 'e'. ¡No abras los labios!",
+        articulation_type="vowel",
     ),
     Exercise(
         id="de-umlaut-02",
@@ -66,7 +84,8 @@ EXERCISES_DATABASE: List[Exercise] = [
         ipa="fyːɐ̯ fʏnf ˈʃyːlɐ ɡɪpt ɛs ˈyːbʊŋən",
         translation_es="Para cinco alumnos hay ejercicios.",
         focus_phonemes=["yː", "ʏ"],
-        tip="Para 'ü', pon los labios como si fueras a silbar o dar un beso (posición de 'u'), pero intenta pronunciar 'i'.",
+        tip="Para 'ü', pon los labios como si fueras a dar un beso (posición de 'u'), pero pronuncia 'i'.",
+        articulation_type="vowel",
     ),
     Exercise(
         id="de-umlaut-03",
@@ -78,9 +97,80 @@ EXERCISES_DATABASE: List[Exercise] = [
         ipa="diː ˈmɛːtçən ˈvɛːlən ˈʃøːnə ˈɛpfəl",
         translation_es="Las chicas eligen manzanas hermosas.",
         focus_phonemes=["ɛː", "ç", "øː"],
-        tip="La 'ä' es una 'e' más abierta que la española. Abre la mandíbula un poco más hacia abajo.",
+        tip="La 'ä' es una 'e' abierta. Baja ligeramente la mandíbula inferior manteniendo la lengua adelante.",
+        articulation_type="vowel",
     ),
-    # 3. Auslautverhärtung (Ensordecimiento final de consonantes)
+    Exercise(
+        id="de-umlaut-04",
+        language="de-DE",
+        category="Umlauts (ä, ö, ü)",
+        level="A2",
+        title="Contraste O base vs. Ö Umlaut",
+        target_text="Ist es schon spät für dieses schöne Konzert?",
+        ipa="ɪst ɛs ʃoːn ʃpɛːt fyːɐ̯ ˈdiːzəs ˈʃøːnə kɔnˈtsɛʁt",
+        translation_es="¿Ya es tarde para este hermoso concierto?",
+        focus_phonemes=["oː", "øː", "ʃ", "ts"],
+        tip="Compara 'schon' (/oː/ posterior) con 'schöne' (/øː/ anterior redondeada con labios en óvalo cerrado).",
+        articulation_type="vowel",
+    ),
+
+    # 3. Pares Mínimos Vocálicos Alemanes (Vocal Larga Tensa vs Corta Relajada)
+    Exercise(
+        id="de-vowel-len-01",
+        language="de-DE",
+        category="Pares Mínimos Vocálicos",
+        level="A2",
+        title="Larga /iː/ vs Corta /ɪ/ (bieten vs bitten)",
+        target_text="Wir bieten Hilfe, wenn Sie höflich bitten.",
+        ipa="viːɐ̯ ˈbiːtn̩ ˈhɪlfə vɛn ziː ˈhøːflɪç ˈbɪtn̩",
+        translation_es="Ofrecemos ayuda si usted pide cortésmente.",
+        focus_phonemes=["iː", "ɪ", "øː", "ç"],
+        tip="En 'bieten' la 'ie' es larga, tensa y sonriente (/iː/). En 'bitten' la 'i' es corta y relajada (/ɪ/).",
+        articulation_type="vowel",
+    ),
+    Exercise(
+        id="de-vowel-len-02",
+        language="de-DE",
+        category="Pares Mínimos Vocálicos",
+        level="A2",
+        title="Larga /eː/ vs Corta /ɛ/ (Beet vs Bett)",
+        target_text="Die Blumen im Beet und das weiche Bett.",
+        ipa="diː ˈbluːmən ɪm beːt ʊnt das ˈvaɪçə bɛt",
+        translation_es="Las flores en el parterre y la cama blanda.",
+        focus_phonemes=["eː", "ɛ", "ç", "t"],
+        tip="'Beet' tiene una /eː/ larga y cerrada; 'Bett' tiene una /ɛ/ corta, abierta y seca.",
+        articulation_type="vowel",
+    ),
+    Exercise(
+        id="de-vowel-len-03",
+        language="de-DE",
+        category="Pares Mínimos Vocálicos",
+        level="A2",
+        title="Larga /yː/ vs Corta /ʏ/ (fühlen vs füllen)",
+        target_text="Wir fühlen die Kälte und füllen die Gläser.",
+        ipa="viːɐ̯ ˈfyːlən diː ˈkɛltə ʊnt ˈfʏlən diː ˈɡlɛːzɐ",
+        translation_es="Sentimos el frío y llenamos los vasos.",
+        focus_phonemes=["yː", "ʏ", "ɛː"],
+        tip="'fühlen' tiene una 'ü' larga y tensa (/yː/). En 'füllen' la doble 'll' acorta la vocal a /ʏ/ relajada.",
+        articulation_type="vowel",
+    ),
+
+    # 4. Sibilantes y Fricativas Alemanas (/s/ sorda vs /z/ sonora vs /ts/)
+    Exercise(
+        id="de-s-z-01",
+        language="de-DE",
+        category="Sibilantes y Fricativas",
+        level="B1",
+        title="Sonora /z/ vs Sorda /s/ (reisen vs reißen)",
+        target_text="Sie reisen gern und reißen alte Zettel ab.",
+        ipa="ziː ˈʁaɪzn̩ ɡɛʁn ʊnt ˈʁaɪsn̩ ˈaltə ˈtsɛtl̩ ap",
+        translation_es="Ellos viajan con gusto y rompen notas viejas.",
+        focus_phonemes=["z", "s", "ts"],
+        tip="'reisen' tiene 's' intervocálica sonora (/z/, con vibración laríngea como abeja). 'reißen' (ß) es totalmente sorda (/s/).",
+        articulation_type="alveolar",
+    ),
+
+    # 5. Auslautverhärtung (Ensordecimiento final de consonantes)
     Exercise(
         id="de-auslaut-01",
         language="de-DE",
@@ -90,10 +180,12 @@ EXERCISES_DATABASE: List[Exercise] = [
         target_text="Guten Tag, das ist ein schönes Bild!",
         ipa="ˈɡuːtn taːk das ɪst aɪn ˈʃøːnəs bɪlt",
         translation_es="¡Buen día, esta es una hermosa imagen!",
-        focus_phonemes=["k", "t"],
-        tip="Al final de palabra o sílaba, 'Tag' termina en sonido /k/, y 'Bild' termina en sonido /t/.",
+        focus_phonemes=["k", "t", "p"],
+        tip="Al final de palabra o sílaba en alemán, 'Tag' termina en sonido sordo /k/, y 'Bild' termina en sonido /t/ sin vibrar.",
+        articulation_type="alveolar",
     ),
-    # 4. R Alemana (Uvular /ʁ/ vs Vocalizada /ɐ/)
+
+    # 6. R Alemana (Uvular /ʁ/ vs Vocalizada /ɐ/)
     Exercise(
         id="de-r-01",
         language="de-DE",
@@ -104,9 +196,26 @@ EXERCISES_DATABASE: List[Exercise] = [
         ipa="deːɐ̯ ˈleːʁɐ tʁɪŋkt ˈklaːʁəs ˈvasɐ",
         translation_es="El profesor bebe agua clara.",
         focus_phonemes=["ʁ", "ɐ"],
-        tip="Al final de palabra (-er, der), la 'r' se vocaliza en /ɐ/ (suena como una 'a' corta y relajada). Al inicio, vibra en la campanilla.",
+        tip="Al final de palabra (-er, der), la 'r' se vocaliza en /ɐ/ (suena como una 'a' corta y relajada). Al inicio, vibra suavemente en la campanilla.",
+        articulation_type="uvular",
     ),
-    # 5. Frases cotidianas A1-B1
+
+    # 7. Zungenbrecher (Trabalenguas)
+    Exercise(
+        id="de-tongue-twister-01",
+        language="de-DE",
+        category="Zungenbrecher (Trabalenguas)",
+        level="B1",
+        title="Zungenbrecher de 'Fischers Fritz'",
+        target_text="Fischers Fritz fischt frische Fische.",
+        ipa="ˈfɪʃɐs fʁɪts fɪʃt ˈfʁɪʃə ˈfɪʃə",
+        translation_es="Fritz el pescador pesca peces frescos.",
+        focus_phonemes=["ʃ", "ts", "ʁ", "ɪ"],
+        tip="Combina con agilidad la fricativa postalveolar /ʃ/ con la africada /ts/ y la R uvular /ʁ/.",
+        articulation_type="postalveolar",
+    ),
+
+    # 8. Vida Cotidiana A1-B1
     Exercise(
         id="de-daily-01",
         language="de-DE",
@@ -118,6 +227,7 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="Disculpe, ¿puedo pedir un café por favor?",
         focus_phonemes=["ç", "ʃ"],
         tip="Presta atención a la fluidez y a la unión de palabras en preguntas de cortesía.",
+        articulation_type="palatal",
     ),
     Exercise(
         id="de-daily-02",
@@ -129,8 +239,10 @@ EXERCISES_DATABASE: List[Exercise] = [
         ipa="ɪç ˈɡlaʊbə das viːɐ̯ ˈhɔɪtə nɔx ˈpʏŋktlɪç ˈankɔmən",
         translation_es="Creo que hoy todavía llegaremos puntuales.",
         focus_phonemes=["ç", "x", "ʏ"],
-        tip="Cuida la entonación que desciende al final de la cláusula subordinada.",
+        tip="Cuida la entonación que desciende al final de la cláusula subordinada y la pronunciación de 'pünktlich'.",
+        articulation_type="palatal",
     ),
+
     # =========================================================================
     # INGLÉS (en-US)
     # =========================================================================
@@ -145,7 +257,8 @@ EXERCISES_DATABASE: List[Exercise] = [
         ipa="aɪ θɪŋk ˈθɜːti θriː θɪŋz ɑːr ˈθrɪlɪŋ",
         translation_es="Creo que treinta y tres cosas son emocionantes.",
         focus_phonemes=["θ"],
-        tip="Coloca la punta de la lengua suavemente entre los dientes frontales y sopla aire sin vibrar las cuerdas vocales.",
+        tip="Coloca la punta de la lengua suavemente entre los dientes frontales e impulsa aire sin vibrar las cuerdas vocales.",
+        articulation_type="dental",
     ),
     Exercise(
         id="en-th-02",
@@ -157,9 +270,24 @@ EXERCISES_DATABASE: List[Exercise] = [
         ipa="ðɪs ɪz ðɛr ˈfɑːðər ænd ˈmʌðər",
         translation_es="Este es el padre y la madre de ellos.",
         focus_phonemes=["ð"],
-        tip="Misma posición de la lengua que el TH sordo, pero haciendo vibrar activamente la garganta (cuerdas vocales).",
+        tip="Misma posición interdental de la lengua, pero haciendo vibrar activamente la garganta (cuerdas vocales).",
+        articulation_type="dental",
     ),
-    # 2. Contraste de vocales cortas vs largas (/iː/ vs /ɪ/)
+    Exercise(
+        id="en-th-03",
+        language="en-US",
+        category="TH Sounds (/θ/ vs /ð/)",
+        level="A2",
+        title="Contraste directo: Breath (/θ/) vs. Breathe (/ð/)",
+        target_text="Take a deep breath and breathe calmly.",
+        ipa="teɪk ə diːp brɛθ ænd briːð ˈkɑːmli",
+        translation_es="Toma una respiración profunda y respira con calma.",
+        focus_phonemes=["θ", "ð", "iː", "ɛ"],
+        tip="'Breath' termina en /θ/ sorda; 'breathe' tiene vocal larga /iː/ y termina en /ð/ sonora con vibración.",
+        articulation_type="dental",
+    ),
+
+    # 2. Pares Mínimos Vocálicos (Interferencia común del español)
     Exercise(
         id="en-vowels-01",
         language="en-US",
@@ -171,6 +299,7 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="La gran oveja duerme sobre la colina verde.",
         focus_phonemes=["iː", "ɪ"],
         tip="En 'sleeps' la vocal es tensa y sonriente (/iː/). En 'big' e 'hill', la vocal es relajada, corta y central (/ɪ/).",
+        articulation_type="vowel",
     ),
     Exercise(
         id="en-vowels-02",
@@ -182,8 +311,36 @@ EXERCISES_DATABASE: List[Exercise] = [
         ipa="ðə blæk kæt dʒʌmpt ˈoʊvər ðə kʌp",
         translation_es="El gato negro saltó sobre la taza.",
         focus_phonemes=["æ", "ʌ"],
-        tip="/æ/ requiere abrir la boca ampliamente hacia abajo. /ʌ/ es una vocal corta y neutral en el centro de la boca.",
+        tip="/æ/ requiere abrir la mandíbula hacia abajo como diciendo 'a' con lengua de 'e'. /ʌ/ es neutra y breve en el centro.",
+        articulation_type="vowel",
     ),
+    Exercise(
+        id="en-vowels-03",
+        language="en-US",
+        category="Pares Mínimos Vocálicos",
+        level="A2",
+        title="Pull /ʊ/ vs. Pool /uː/",
+        target_text="Please pull the rope before you jump in the pool.",
+        ipa="pliːz pʊl ðə roʊp bɪˈfɔːr juː dʒʌmp ɪn ðə puːl",
+        translation_es="Por favor jala la cuerda antes de saltar a la piscina.",
+        focus_phonemes=["ʊ", "uː"],
+        tip="'Pull' usa /ʊ/ corta y relajada (labios semi-redondeados). 'Pool' usa /uː/ tensa, larga y con labios en círculo cerrado.",
+        articulation_type="vowel",
+    ),
+    Exercise(
+        id="en-vowels-04",
+        language="en-US",
+        category="Pares Mínimos Vocálicos",
+        level="B1",
+        title="Cot /ɑː/ vs. Caught /ɔː/ vs. Coat /oʊ/",
+        target_text="Paul caught a cold and put on his warm coat.",
+        ipa="pɔːl kɑːt ə koʊld ænd pʊt ɑːn hɪz wɔːrm koʊt",
+        translation_es="Paul se resfrió y se puso su abrigo cálido.",
+        focus_phonemes=["ɔː", "oʊ", "ɑː"],
+        tip="No sustituyas todas por la 'o' española: /ɔː/ es abierta y posterior, mientras que /oʊ/ en 'coat' es un diptongo dinámico.",
+        articulation_type="vowel",
+    ),
+
     # 3. Labiodental V (/v/) vs Bilabial B (/b/)
     Exercise(
         id="en-b-v-01",
@@ -195,9 +352,71 @@ EXERCISES_DATABASE: List[Exercise] = [
         ipa="ˈvɛri bɛst frɛndz ˈtrævəl baɪ væn ænd boʊt",
         translation_es="Los mejores amigos viajan en furgoneta y barco.",
         focus_phonemes=["v", "b"],
-        tip="En español no diferenciamos B de V. En inglés, para la 'V' tus dientes superiores DEBEN tocar el labio inferior con fricción.",
+        tip="En español no diferenciamos B de V. En inglés, para la 'V' tus dientes superiores DEBEN tocar el labio inferior con fricción acústica continua.",
+        articulation_type="labiodental",
     ),
-    # 4. Conversación Fluida
+
+    # 4. Semivocal W (/w/) vs Labiodental V (/v/)
+    Exercise(
+        id="en-w-v-01",
+        language="en-US",
+        category="W vs V",
+        level="A2",
+        title="West (/w/) vs. Vest (/v/)",
+        target_text="We went west wearing very warm vests.",
+        ipa="wiː wɛnt wɛst ˈwɛrɪŋ ˈvɛri wɔːrm vɛsts",
+        translation_es="Fuimos al oeste vistiendo chalecos muy abrigados.",
+        focus_phonemes=["w", "v"],
+        tip="Para 'W' (/w/), los dientes NUNCA tocan los labios (redondea como una 'u'). Para 'V' (/v/), los dientes superiores rozan el labio inferior.",
+        articulation_type="labiodental",
+    ),
+
+    # 5. Líquidas y Aproximantes (R rótica /ɹ/ vs L lateral /l/)
+    Exercise(
+        id="en-r-l-01",
+        language="en-US",
+        category="Líquidas (R vs L)",
+        level="A2",
+        title="American R (/ɹ/) vs. L (/l/)",
+        target_text="The red light turns right along the long river.",
+        ipa="ðə rɛd laɪt tɜːrnz raɪt əˈlɔːŋ ðə lɔːŋ ˈrɪvər",
+        translation_es="La luz roja gira a la derecha a lo largo del río largo.",
+        focus_phonemes=["r", "l"],
+        tip="Para la 'R' en inglés americano (/ɹ/), la lengua se curva hacia atrás sin tocar el paladar ni vibrar. Para la 'L' (/l/), la punta toca firmemente detrás de los dientes.",
+        articulation_type="alveolar",
+    ),
+
+    # 6. Terminaciones Morfológicas Gramaticales (-ed endings: /t/, /d/, /ɪd/)
+    Exercise(
+        id="en-endings-ed-01",
+        language="en-US",
+        category="Terminaciones Gramaticales (-ed)",
+        level="B1",
+        title="Pasado Regular -ed: /t/, /d/ e /ɪd/",
+        target_text="She walked to the park, played music, and waited.",
+        ipa="ʃiː wɔːkt tuː ðə pɑːrk pleɪd ˈmjuːzɪk ænd ˈweɪtɪd",
+        translation_es="Ella caminó al parque, tocó música y esperó.",
+        focus_phonemes=["t", "d", "ɪd"],
+        tip="'walked' termina en sonido seco /t/; 'played' termina en sonido sonoro /d/; solo 'waited' (tras sonido t/d) añade una sílaba extra /ɪd/.",
+        articulation_type="alveolar",
+    ),
+
+    # 7. Tongue Twisters (Trabalenguas en Inglés)
+    Exercise(
+        id="en-tongue-twister-01",
+        language="en-US",
+        category="Tongue Twisters (Trabalenguas)",
+        level="B1",
+        title="She sells seashells (/s/ vs /ʃ/)",
+        target_text="She sells seashells by the seashore.",
+        ipa="ʃiː sɛlz ˈsiːʃɛlz baɪ ðə ˈsiːʃɔːr",
+        translation_es="Ella vende conchas marinas a la orilla del mar.",
+        focus_phonemes=["ʃ", "s", "z"],
+        tip="Entrena la transición veloz entre la sibilante alveolar /s/ en 'sells/sea' y la postalveolar /ʃ/ en 'she/shells/shore'.",
+        articulation_type="postalveolar",
+    ),
+
+    # 8. Conversación Cotidiana
     Exercise(
         id="en-daily-01",
         language="en-US",
@@ -209,6 +428,7 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="Realmente agradecería tus comentarios sobre este proyecto.",
         focus_phonemes=["ʃ", "ð", "æ"],
         tip="Enfócate en la fluidez del ritmo y la reducción de sonidos no acentuados ('would', 'your').",
+        articulation_type="postalveolar",
     ),
 ]
 

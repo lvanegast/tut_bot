@@ -152,6 +152,218 @@
                     <span id="record-timer" class="hidden text-xs bg-indigo-900/40 px-2 py-0.5 rounded-md font-mono">00:00</span>
                 </button>
             </div>
+
+            <!-- Visualizador de Onda Acústica en Vivo (Canvas) -->
+            <div id="visualizer-container" class="hidden mt-6 w-full bg-slate-950 rounded-2xl p-4 shadow-inner border border-slate-800 transition-all">
+                <div class="flex items-center justify-between text-xs text-slate-400 mb-2 font-mono">
+                    <span class="flex items-center gap-1.5 text-rose-400 font-bold">
+                        <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
+                        EN VIVO • PCM 16.000 Hz MONO
+                    </span>
+                    <span id="visualizer-status" class="text-indigo-300">Monitoreando espectro acústico...</span>
+                </div>
+                <canvas id="waveform-canvas" width="800" height="90" class="w-full h-20 rounded-xl block bg-slate-900/50"></canvas>
+            </div>
+        </div>
+
+        <!-- Tarjeta de Atlas Fonético Visual Interactivo (IPA & Articulación) -->
+        <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-sm space-y-5">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xl shadow-md shadow-violet-100">
+                        🗺️
+                    </div>
+                    <div>
+                        <h3 class="text-base sm:text-lg font-extrabold text-slate-900">Atlas Fonético y Articulatorio</h3>
+                        <p class="text-xs text-slate-500 font-medium">Posición de lengua, labios y cavidad bucal para los fonemas del ejercicio.</p>
+                    </div>
+                </div>
+
+                <!-- Selector de Pestaña Visual: Vocales vs Consonantes -->
+                <div class="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+                    <button id="tab-vowels-map" onclick="switchVisualMap('vowels')" class="px-3 py-1.5 rounded-lg bg-white text-slate-900 shadow-xs transition-all">
+                        📐 Cuadrilátero Vocálico (IPA)
+                    </button>
+                    <button id="tab-consonants-map" onclick="switchVisualMap('consonants')" class="px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition-all">
+                        👄 Puntos de Articulación
+                    </button>
+                </div>
+            </div>
+
+            <!-- Vista 1: Cuadrilátero Vocálico IPA SVG -->
+            <div id="vowel-map-container" class="space-y-4">
+                <div class="flex flex-wrap items-center justify-between text-xs text-slate-500 gap-2">
+                    <span>Posición lingual: <strong>Anterior ➔ Posterior</strong> | Apertura: <strong>Cerrada ➔ Abierta</strong></span>
+                    <span id="active-vowel-indicator" class="font-mono font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100">
+                        Fonema activo: /øː/
+                    </span>
+                </div>
+                <!-- SVG Interactivo del Cuadrilátero -->
+                <div class="relative w-full overflow-hidden bg-slate-950 rounded-2xl p-4 sm:p-6 flex items-center justify-center shadow-inner">
+                    <svg id="vowel-quadrilateral-svg" viewBox="0 0 540 330" class="w-full max-w-xl h-auto select-none">
+                        <defs>
+                            <radialGradient id="vowelGlow" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.9" />
+                                <stop offset="100%" stop-color="#be123c" stop-opacity="0" />
+                            </radialGradient>
+                        </defs>
+
+                        <!-- Trapezoide IPA base -->
+                        <polygon points="90,45 470,45 470,285 270,285" fill="#090d16" stroke="#334155" stroke-width="2" />
+                        
+                        <!-- Líneas horizontales de altura lingual -->
+                        <line x1="150" y1="125" x2="470" y2="125" stroke="#1e293b" stroke-dasharray="4,4" stroke-width="1.5" />
+                        <line x1="210" y1="205" x2="470" y2="205" stroke="#1e293b" stroke-dasharray="4,4" stroke-width="1.5" />
+                        
+                        <!-- Eje Central -->
+                        <line x1="280" y1="45" x2="370" y2="285" stroke="#1e293b" stroke-dasharray="4,4" stroke-width="1.5" />
+
+                        <!-- Etiquetas de los Ejes -->
+                        <text x="130" y="26" fill="#94a3b8" font-size="11" font-weight="700" text-anchor="middle">ANTERIOR (Front)</text>
+                        <text x="320" y="26" fill="#64748b" font-size="11" font-weight="600" text-anchor="middle">CENTRAL</text>
+                        <text x="450" y="26" fill="#94a3b8" font-size="11" font-weight="700" text-anchor="middle">POSTERIOR (Back)</text>
+
+                        <text x="16" y="49" fill="#94a3b8" font-size="11" font-weight="700">Cerrada</text>
+                        <text x="16" y="129" fill="#64748b" font-size="10" font-weight="600">Cerrada-M.</text>
+                        <text x="16" y="209" fill="#64748b" font-size="10" font-weight="600">Abierta-M.</text>
+                        <text x="16" y="289" fill="#94a3b8" font-size="11" font-weight="700">Abierta</text>
+
+                        <!-- Vocales Nodos Interactivos con [data-vowel] -->
+                        <!-- Cerradas Anteriores: iː / yː -->
+                        <g id="vowel-node-i" class="vowel-node cursor-pointer" data-vowel="iː" transform="translate(85, 45)">
+                            <circle class="vowel-halo" r="16" fill="url(#vowelGlow)" opacity="0"></circle>
+                            <circle class="vowel-dot" r="7" fill="#38bdf8"></circle>
+                            <text x="-14" y="4" fill="#ffffff" font-size="13" font-family="monospace" font-weight="bold" text-anchor="end">iː</text>
+                        </g>
+                        <g id="vowel-node-y" class="vowel-node cursor-pointer" data-vowel="yː" transform="translate(108, 45)">
+                            <circle class="vowel-halo" r="16" fill="url(#vowelGlow)" opacity="0"></circle>
+                            <circle class="vowel-dot" r="7" fill="#c084fc"></circle>
+                            <text x="14" y="4" fill="#ffffff" font-size="13" font-family="monospace" font-weight="bold" text-anchor="start">yː</text>
+                        </g>
+
+                        <!-- Casi cerradas: ɪ / ʏ -->
+                        <g id="vowel-node-ih" class="vowel-node cursor-pointer" data-vowel="ɪ" transform="translate(145, 85)">
+                            <circle class="vowel-halo" r="16" fill="url(#vowelGlow)" opacity="0"></circle>
+                            <circle class="vowel-dot" r="6" fill="#38bdf8"></circle>
+                            <text x="-12" y="4" fill="#e2e8f0" font-size="12" font-family="monospace" font-weight="bold" text-anchor="end">ɪ</text>
+                        </g>
+                        <g id="vowel-node-yh" class="vowel-node cursor-pointer" data-vowel="ʏ" transform="translate(168, 85)">
+                            <circle class="vowel-halo" r="16" fill="url(#vowelGlow)" opacity="0"></circle>
+                            <circle class="vowel-dot" r="6" fill="#c084fc"></circle>
+                            <text x="12" y="4" fill="#e2e8f0" font-size="12" font-family="monospace" font-weight="bold" text-anchor="start">ʏ</text>
+                        </g>
+
+                        <!-- Cerradas-Medias: eː / øː -->
+                        <g id="vowel-node-e" class="vowel-node cursor-pointer" data-vowel="eː" transform="translate(145, 125)">
+                            <circle class="vowel-halo" r="16" fill="url(#vowelGlow)" opacity="0"></circle>
+                            <circle class="vowel-dot" r="7" fill="#38bdf8"></circle>
+                            <text x="-14" y="4" fill="#ffffff" font-size="13" font-family="monospace" font-weight="bold" text-anchor="end">eː</text>
+                        </g>
+                        <g id="vowel-node-oe_long" class="vowel-node cursor-pointer" data-vowel="øː" transform="translate(168, 125)">
+                            <circle class="vowel-halo" r="16" fill="url(#vowelGlow)" opacity="0"></circle>
+                            <circle class="vowel-dot" r="7" fill="#c084fc"></circle>
+                            <text x="14" y="4" fill="#ffffff" font-size="13" font-family="monospace" font-weight="bold" text-anchor="start">øː</text>
+                        </g>
+
+                        <!-- Abiertas-Medias: ɛ, œ, ɛː -->
+                        <g id="vowel-node-eh" class="vowel-node cursor-pointer" data-vowel="ɛ" transform="translate(205, 205)">
+                            <circle class="vowel-halo" r="16" fill="url(#vowelGlow)" opacity="0"></circle>
+                            <circle class="vowel-dot" r="6" fill="#38bdf8"></circle>
+                            <text x="-12" y="4" fill="#e2e8f0" font-size="12" font-family="monospace" font-weight="bold" text-anchor="end">ɛ</text>
+                        </g>
+                        <g id="vowel-node-oe_short" class="vowel-node cursor-pointer" data-vowel="œ" transform="translate(225, 205)">
+                            <circle class="vowel-halo" r="16" fill="url(#vowelGlow)" opacity="0"></circle>
+                            <circle class="vowel-dot" r="6" fill="#c084fc"></circle>
+                            <text x="12" y="4" fill="#e2e8f0" font-size="12" font-family="monospace" font-weight="bold" text-anchor="start">œ</text>
+                        </g>
+                        <g id="vowel-node-ae_long" class="vowel-node cursor-pointer" data-vowel="ɛː" transform="translate(200, 175)">
+                            <circle class="vowel-halo" r="16" fill="url(#vowelGlow)" opacity="0"></circle>
+                            <circle class="vowel-dot" r="6" fill="#38bdf8"></circle>
+                            <text x="-12" y="4" fill="#e2e8f0" font-size="12" font-family="monospace" font-weight="bold" text-anchor="end">ɛː</text>
+                        </g>
+
+                        <!-- Abiertas: æ / a -->
+                        <g id="vowel-node-ae" class="vowel-node cursor-pointer" data-vowel="æ" transform="translate(235, 250)">
+                            <circle class="vowel-halo" r="16" fill="url(#vowelGlow)" opacity="0"></circle>
+                            <circle class="vowel-dot" r="7" fill="#38bdf8"></circle>
+                            <text x="-14" y="4" fill="#ffffff" font-size="13" font-family="monospace" font-weight="bold" text-anchor="end">æ</text>
+                        </g>
+                        <g id="vowel-node-a" class="vowel-node cursor-pointer" data-vowel="a" transform="translate(270, 285)">
+                            <circle class="vowel-halo" r="16" fill="url(#vowelGlow)" opacity="0"></circle>
+                            <circle class="vowel-dot" r="7" fill="#38bdf8"></circle>
+                            <text x="-14" y="4" fill="#ffffff" font-size="13" font-family="monospace" font-weight="bold" text-anchor="end">a</text>
+                        </g>
+
+                        <!-- Centrales: ə, ɐ, ʌ -->
+                        <g id="vowel-node-schwa" class="vowel-node cursor-pointer" data-vowel="ə" transform="translate(325, 165)">
+                            <circle class="vowel-halo" r="16" fill="url(#vowelGlow)" opacity="0"></circle>
+                            <circle class="vowel-dot" r="6" fill="#94a3b8"></circle>
+                            <text x="0" y="-10" fill="#f8fafc" font-size="12" font-family="monospace" font-weight="bold" text-anchor="middle">ə</text>
+                        </g>
+                        <g id="vowel-node-er" class="vowel-node cursor-pointer" data-vowel="ɐ" transform="translate(345, 235)">
+                            <circle class="vowel-halo" r="16" fill="url(#vowelGlow)" opacity="0"></circle>
+                            <circle class="vowel-dot" r="6" fill="#94a3b8"></circle>
+                            <text x="12" y="4" fill="#f8fafc" font-size="12" font-family="monospace" font-weight="bold" text-anchor="start">ɐ</text>
+                        </g>
+                        <g id="vowel-node-wedge" class="vowel-node cursor-pointer" data-vowel="ʌ" transform="translate(385, 205)">
+                            <circle class="vowel-halo" r="16" fill="url(#vowelGlow)" opacity="0"></circle>
+                            <circle class="vowel-dot" r="7" fill="#38bdf8"></circle>
+                            <text x="-12" y="4" fill="#ffffff" font-size="13" font-family="monospace" font-weight="bold" text-anchor="end">ʌ</text>
+                        </g>
+
+                        <!-- Posteriores: uː, ʊ, oː, ɔ, ɑː -->
+                        <g id="vowel-node-u" class="vowel-node cursor-pointer" data-vowel="uː" transform="translate(470, 45)">
+                            <circle class="vowel-halo" r="16" fill="url(#vowelGlow)" opacity="0"></circle>
+                            <circle class="vowel-dot" r="7" fill="#c084fc"></circle>
+                            <text x="14" y="4" fill="#ffffff" font-size="13" font-family="monospace" font-weight="bold" text-anchor="start">uː</text>
+                        </g>
+                        <g id="vowel-node-uh" class="vowel-node cursor-pointer" data-vowel="ʊ" transform="translate(415, 85)">
+                            <circle class="vowel-halo" r="16" fill="url(#vowelGlow)" opacity="0"></circle>
+                            <circle class="vowel-dot" r="6" fill="#c084fc"></circle>
+                            <text x="12" y="4" fill="#e2e8f0" font-size="12" font-family="monospace" font-weight="bold" text-anchor="start">ʊ</text>
+                        </g>
+                        <g id="vowel-node-o" class="vowel-node cursor-pointer" data-vowel="oː" transform="translate(470, 125)">
+                            <circle class="vowel-halo" r="16" fill="url(#vowelGlow)" opacity="0"></circle>
+                            <circle class="vowel-dot" r="7" fill="#c084fc"></circle>
+                            <text x="14" y="4" fill="#ffffff" font-size="13" font-family="monospace" font-weight="bold" text-anchor="start">oː</text>
+                        </g>
+                        <g id="vowel-node-oh" class="vowel-node cursor-pointer" data-vowel="ɔ" transform="translate(470, 205)">
+                            <circle class="vowel-halo" r="16" fill="url(#vowelGlow)" opacity="0"></circle>
+                            <circle class="vowel-dot" r="6" fill="#c084fc"></circle>
+                            <text x="14" y="4" fill="#e2e8f0" font-size="12" font-family="monospace" font-weight="bold" text-anchor="start">ɔ</text>
+                        </g>
+                        <g id="vowel-node-ah" class="vowel-node cursor-pointer" data-vowel="ɑː" transform="translate(470, 285)">
+                            <circle class="vowel-halo" r="16" fill="url(#vowelGlow)" opacity="0"></circle>
+                            <circle class="vowel-dot" r="7" fill="#38bdf8"></circle>
+                            <text x="14" y="4" fill="#ffffff" font-size="13" font-family="monospace" font-weight="bold" text-anchor="start">ɑː</text>
+                        </g>
+                    </svg>
+                </div>
+                <!-- Banner explicativo del fonema activo/seleccionado -->
+                <div id="vowel-info-banner" class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                    <span id="vowel-info-desc" class="text-slate-700 font-medium">Toca o pasa el cursor por cualquier fonema para ver su colocación lingual.</span>
+                    <span class="text-[11px] text-slate-400 font-semibold shrink-0">🔵 Labios estirados/relajados | 🟣 Labios redondeados</span>
+                </div>
+            </div>
+
+            <!-- Vista 2: Puntos de Articulación Consonántica -->
+            <div id="consonants-map-container" class="hidden space-y-4">
+                <p class="text-xs text-slate-500 font-medium">
+                    Puntos anatómicos del tracto vocal donde se forma el sonido por bloqueo o fricción de aire:
+                </p>
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5" id="articulation-zones-grid">
+                    <!-- Badges generados dinámicamente -->
+                </div>
+                <div id="consonant-zone-detail" class="p-4 rounded-2xl bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-100 text-xs space-y-1.5">
+                    <div class="flex items-center gap-2">
+                        <span id="cz-badge" class="px-2 py-0.5 rounded-md font-bold text-[11px] bg-indigo-600 text-white">Palatal</span>
+                        <h5 id="cz-title" class="font-extrabold text-sm text-indigo-950">Ich-Laut (/ç/) - Fricativa Palatal</h5>
+                    </div>
+                    <p id="cz-desc" class="text-slate-700 leading-relaxed font-medium">
+                        El dorso de la lengua sube pegándose al paladar duro. El aire sisea suavemente sin vibración en cuerdas vocales ni garganta.
+                    </p>
+                </div>
+            </div>
         </div>
 
         <!-- Indicador de Carga / Procesando -->

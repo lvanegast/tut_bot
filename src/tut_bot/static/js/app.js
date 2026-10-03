@@ -14,6 +14,7 @@ let lastEvaluation = null;
 // Inicialización
 document.addEventListener('DOMContentLoaded', async () => {
     recorder = new window.AudioRecorder();
+    initInteractiveVowelChart();
     await checkHealth();
     await loadCategories();
     await loadExercises();
@@ -171,6 +172,9 @@ function renderExercise() {
         phonemesContainer.appendChild(span);
     });
 
+    // Actualizar Atlas Fonético y Articulatorio Gráfico
+    updateVisualAtlas(ex);
+
     // Ocultar resultados previos
     document.getElementById('results-card').classList.add('hidden');
 }
@@ -278,6 +282,7 @@ async function toggleRecording() {
 
         try {
             await recorder.start();
+            startVisualizer();
             recordBtn.className = "w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm flex items-center justify-center gap-3 transition-all shadow-lg recording-pulse";
             recordBtnText.textContent = "Detener Grabación";
             recordIcon.className = "w-3.5 h-3.5 rounded-sm bg-white";
@@ -299,6 +304,7 @@ async function toggleRecording() {
     } else {
         // Detener grabación
         clearInterval(recordingTimerInterval);
+        stopVisualizer();
         timerElem.classList.add('hidden');
         recordBtn.className = "w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold text-sm flex items-center justify-center gap-3 transition-all shadow-lg shadow-indigo-200";
         recordBtnText.textContent = "Grabar Mi Pronunciación";
@@ -488,6 +494,266 @@ async function loadUserStats() {
         }
     } catch (e) {
         console.warn("No se pudieron cargar estadísticas:", e);
+    }
+}
+
+// =========================================================================
+// Visualizador de Ondas Acústicas en Tiempo Real (Web Audio API + Canvas)
+// =========================================================================
+
+let visualizerAnimFrame = null;
+
+function startVisualizer() {
+    const container = document.getElementById('visualizer-container');
+    const canvas = document.getElementById('waveform-canvas');
+    if (!container || !canvas || !recorder) return;
+
+    container.classList.remove('hidden');
+    const analyser = recorder.getAnalyser();
+    if (!analyser) return;
+
+    const ctx = canvas.getContext('2d');
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    function renderFrame() {
+        visualizerAnimFrame = requestAnimationFrame(renderFrame);
+        analyser.getByteFrequencyData(dataArray);
+
+        ctx.fillStyle = '#020617'; // slate-950
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const totalBars = 48;
+        const step = Math.floor(bufferLength / totalBars) || 1;
+        const barWidth = (canvas.width / totalBars) - 2;
+
+        for (let i = 0; i < totalBars; i++) {
+            const val = dataArray[i * step] || 0;
+            const barHeight = Math.max(4, (val / 255) * (canvas.height - 12));
+            const x = i * (barWidth + 2);
+            const y = canvas.height - barHeight - 4;
+
+            const grad = ctx.createLinearGradient(0, canvas.height, 0, 0);
+            grad.addColorStop(0, '#4f46e5'); // Indigo
+            grad.addColorStop(0.5, '#9333ea'); // Purple
+            grad.addColorStop(1, '#f43f5e'); // Rose neon
+
+            ctx.fillStyle = grad;
+            if (ctx.roundRect) {
+                ctx.beginPath();
+                ctx.roundRect(x, y, barWidth, barHeight, [3, 3, 1, 1]);
+                ctx.fill();
+            } else {
+                ctx.fillRect(x, y, barWidth, barHeight);
+            }
+        }
+    }
+
+    renderFrame();
+}
+
+function stopVisualizer() {
+    if (visualizerAnimFrame) {
+        cancelAnimationFrame(visualizerAnimFrame);
+        visualizerAnimFrame = null;
+    }
+    const container = document.getElementById('visualizer-container');
+    if (container) {
+        container.classList.add('hidden');
+    }
+}
+
+// =========================================================================
+// Atlas Fonético y Articulatorio Interactivo (IPA Vowel Chart & Vocal Tract)
+// =========================================================================
+
+const VOWELS_INFO = {
+    'iː': { name: 'Vocal anterior cerrada no redondeada', desc: 'Labios en sonrisa tensa, lengua muy alta hacia los dientes frontales.', de: 'bieten, wir', en: 'sheep, feel' },
+    'yː': { name: 'Umlaut Ü largo cerrado redondeado', desc: 'Labios en beso/silbato de [u], pero impulsando sonido de [i].', de: 'fühlen, über', en: '-' },
+    'ɪ': { name: 'Vocal casi cerrada casi anterior corta', desc: 'Vocal corta y relajada; boca semiabierta sin tensión.', de: 'bitten, ich', en: 'ship, fill' },
+    'ʏ': { name: 'Umlaut Ü corto relajado', desc: 'Umlaut Ü breve y suave con labios ligeramente redondeados.', de: 'füllen, fünf', en: '-' },
+    'eː': { name: 'Vocal anterior cerrada-media tensa', desc: 'E larga y clara con las comisuras de los labios estiradas.', de: 'Beet, See', en: '-' },
+    'øː': { name: 'Umlaut Ö largo cerrado-medio', desc: 'Labios redondeados en posición de "o", pero intentando emitir "e".', de: 'schön, Öl', en: '-' },
+    'ɛ': { name: 'Vocal anterior abierta-media corta', desc: 'E corta y seca, la mandíbula baja moderadamente.', de: 'Bett, sechs', en: 'bed, red' },
+    'œ': { name: 'Umlaut Ö corto abierto-medio', desc: 'Ö breve con boca más abierta y labios en óvalo.', de: 'möchte, zwölf', en: '-' },
+    'ɛː': { name: 'Umlaut Ä largo abierto-medio', desc: 'E abierta y alargada, mandíbula baja manteniendo lengua frontal.', de: 'Mädchen, wählen', en: '-' },
+    'æ': { name: 'Vocal casi abierta anterior (Short A inglesa)', desc: 'Mandíbula muy abierta hacia abajo con lengua extendida.', de: '-', en: 'cat, black, trap' },
+    'a': { name: 'Vocal abierta anterior', desc: 'A frontal abierta y brillante.', de: 'Tag, klares', en: '-' },
+    'ə': { name: 'Vocal media central (Schwa)', desc: 'Vocal totalmente neutra en sílabas sin acento.', de: 'bitte, habe', en: 'about, father' },
+    'ɐ': { name: 'Vocal cuasi-abierta central (R vocalizada)', desc: 'R alemana final (-er), suena como una "a" suave y relajada.', de: 'Lehrer, Wasser', en: '-' },
+    'ʌ': { name: 'Vocal central/posterior semiabierta (Wedge)', desc: 'Vocal corta y gutural en el centro de la boca.', de: '-', en: 'cut, cup, love' },
+    'uː': { name: 'Vocal posterior cerrada redondeada', desc: 'U tensa y profunda con labios en círculo estrecho.', de: 'Buch, gut', en: 'pool, boot' },
+    'ʊ': { name: 'Vocal posterior casi cerrada corta', desc: 'U corta y relajada sin tanta tensión labial.', de: 'Mutter, und', en: 'pull, book' },
+    'oː': { name: 'Vocal posterior cerrada-media', desc: 'O larga y pura, labios proyectados en círculo.', de: 'schon, Ofen', en: '-' },
+    'ɔ': { name: 'Vocal posterior abierta-media corta', desc: 'O corta y abierta, boca amplia.', de: 'offen, kochen', en: 'thought, dog' },
+    'ɑː': { name: 'Vocal posterior abierta no redondeada', desc: 'A profunda que resuena en la parte trasera de la garganta.', de: '-', en: 'father, palm, calm' }
+};
+
+const ARTICULATION_ZONES = [
+    { id: 'bilabial', label: 'Bilabial', icon: '👄', title: 'Labios (Bilabial)', desc: 'Contacto de ambos labios juntos (/b/, /p/, /m/). Expulsión explosiva o resonancia nasal.', phonemes: ['b', 'p', 'm'] },
+    { id: 'labiodental', label: 'Labiodental', icon: '🦷', title: 'Dientes + Labio (/v/, /f/)', desc: 'Los incisivos superiores rozan el labio inferior provocando una fricción continua acústica (/v/ vibrante sonora, /f/ sorda).', phonemes: ['v', 'f'] },
+    { id: 'dental', label: 'Interdental', icon: '👅', title: 'Lengua en Dientes (/θ/ y /ð/)', desc: 'La punta de la lengua asoma suavemente entre los dientes frontales: soplido suave (/θ/ en think) o vibración con voz (/ð/ en this).', phonemes: ['θ', 'ð'] },
+    { id: 'alveolar', label: 'Alveolar', icon: '📍', title: 'Alvéolos Dentales', desc: 'La punta de la lengua toca la cresta tras los dientes superiores (/t/, /d/, /s/, /z/, /n/, /l/). Oposición sonora y sorda clave.', phonemes: ['t', 'd', 's', 'z', 'n', 'l'] },
+    { id: 'postalveolar', label: 'Postalveolar', icon: '👂', title: 'Región Postalveolar (/ʃ/, /tʃ/)', desc: 'La lengua retrocede hacia el paladar con labios redondeados hacia afuera (/ʃ/ como en Deutsch o sheep).', phonemes: ['ʃ', 'ʒ', 'tʃ', 'dʒ'] },
+    { id: 'palatal', label: 'Palatal', icon: '🏔️', title: 'Paladar Medio (Ich-Laut /ç/)', desc: 'El dorso de la lengua sube plano contra el paladar duro medio, susurrando el aire suavemente sin aspereza.', phonemes: ['ç', 'j'] },
+    { id: 'velar', label: 'Velar', icon: '🚪', title: 'Paladar Blando (Ach-Laut /x/)', desc: 'El dorso posterior de la lengua contacta o fricciona contra el velo del paladar (/k/, /ɡ/, /x/ en Buch o kochen).', phonemes: ['k', 'ɡ', 'x', 'ŋ'] },
+    { id: 'uvular', label: 'Uvular', icon: '🌊', title: 'Campanilla / Úvula (R alemana /ʁ/)', desc: 'La campanilla vibra con suavidad o genera fricción gutural en la garganta profunda al inicio de palabra.', phonemes: ['ʁ'] },
+    { id: 'glottal', label: 'Glotal', icon: '🗣️', title: 'Cuerdas Vocales / Glotis (/h/, /ʔ/)', desc: 'Aspiración suave (/h/) o golpe de glotis (/ʔ/) antes de vocales iniciales en alemán.', phonemes: ['h', 'ʔ'] },
+    { id: 'vowel', label: 'Vocálico', icon: '🎯', title: 'Resonancia Vocálica (Cuadrilátero)', desc: 'Tracto vocal totalmente abierto sin obstrucción física; el tono se modula por la altura lingual y la forma labial.', phonemes: ['iː', 'yː', 'øː', 'æ', 'uː', 'ʊ', 'eː', 'oː'] }
+];
+
+// Alternar entre Cuadrilátero Vocálico y Puntos de Articulación
+function switchVisualMap(mode) {
+    const vowelCont = document.getElementById('vowel-map-container');
+    const consCont = document.getElementById('consonants-map-container');
+    const tabVowels = document.getElementById('tab-vowels-map');
+    const tabCons = document.getElementById('tab-consonants-map');
+
+    if (mode === 'vowels') {
+        vowelCont.classList.remove('hidden');
+        consCont.classList.add('hidden');
+        tabVowels.className = "px-3 py-1.5 rounded-lg bg-white text-slate-900 shadow-xs transition-all";
+        tabCons.className = "px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition-all";
+    } else {
+        consCont.classList.remove('hidden');
+        vowelCont.classList.add('hidden');
+        tabCons.className = "px-3 py-1.5 rounded-lg bg-white text-slate-900 shadow-xs transition-all";
+        tabVowels.className = "px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition-all";
+    }
+}
+
+// Inicializar eventos de clic y hover en los nodos del cuadrilátero vocálico
+function initInteractiveVowelChart() {
+    const nodes = document.querySelectorAll('.vowel-node');
+    const infoDesc = document.getElementById('vowel-info-desc');
+
+    nodes.forEach(node => {
+        const v = node.getAttribute('data-vowel');
+        const info = VOWELS_INFO[v];
+
+        node.addEventListener('mouseenter', () => {
+            if (info && infoDesc) {
+                const exStr = currentLanguage === 'de-DE' ? `Ejemplo alemán: "${info.de}"` : `Ejemplo inglés: "${info.en}"`;
+                infoDesc.innerHTML = `<strong>[${v}] ${info.name}:</strong> ${info.desc} <span class="text-indigo-600 font-semibold font-mono">(${exStr})</span>`;
+            }
+        });
+
+        node.addEventListener('click', () => {
+            if (info && infoDesc) {
+                const exStr = currentLanguage === 'de-DE' ? `"${info.de}"` : `"${info.en}"`;
+                infoDesc.innerHTML = `<strong>[${v}] Seleccionado:</strong> ${info.name}. ${info.desc} <em>Ejemplo: ${exStr}</em>`;
+            }
+        });
+    });
+}
+
+// Actualizar Atlas según el ejercicio seleccionado
+function updateVisualAtlas(ex) {
+    if (!ex) return;
+
+    const focusPhonemes = ex.focus_phonemes || [];
+    const activeIndicator = document.getElementById('active-vowel-indicator');
+    const infoDesc = document.getElementById('vowel-info-desc');
+
+    // 1. Actualizar cuadrilátero vocálico
+    const allNodes = document.querySelectorAll('.vowel-node');
+    allNodes.forEach(node => node.classList.remove('active-vowel'));
+
+    const activeVowels = [];
+    allNodes.forEach(node => {
+        const v = node.getAttribute('data-vowel');
+        if (focusPhonemes.includes(v)) {
+            node.classList.add('active-vowel');
+            activeVowels.push(v);
+        }
+    });
+
+    if (activeVowels.length > 0) {
+        if (activeIndicator) {
+            activeIndicator.textContent = `Fonema vocálico activo: /${activeVowels.join('/ /')}/`;
+            activeIndicator.classList.remove('hidden');
+        }
+        const firstV = activeVowels[0];
+        const info = VOWELS_INFO[firstV];
+        if (info && infoDesc) {
+            const exStr = currentLanguage === 'de-DE' ? `Ejemplo: "${info.de}"` : `Ejemplo: "${info.en}"`;
+            infoDesc.innerHTML = `<strong>🎯 Fonema objetivo [${firstV}]:</strong> ${info.name}. ${info.desc} <span class="text-indigo-600 font-bold font-mono">(${exStr})</span>`;
+        }
+    } else {
+        if (activeIndicator) {
+            activeIndicator.textContent = "Sin vocales prioritarias en este ejercicio";
+        }
+    }
+
+    // 2. Renderizar y actualizar Puntos de Articulación Consonántica
+    renderArticulationZones(ex);
+
+    // 3. Selección inteligente de pestaña visual según el tipo de ejercicio
+    const artType = (ex.articulation_type || '').toLowerCase();
+    const isVowelExercise = artType === 'vowel' || ex.category.toLowerCase().includes('umlaut') || ex.category.toLowerCase().includes('vocálic');
+
+    if (isVowelExercise) {
+        switchVisualMap('vowels');
+    } else {
+        switchVisualMap('consonants');
+    }
+}
+
+// Renderizar badges y detalle de las zonas de articulación
+function renderArticulationZones(ex) {
+    const grid = document.getElementById('articulation-zones-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    const artType = (ex.articulation_type || '').toLowerCase();
+    const focusPhonemes = ex.focus_phonemes || [];
+
+    let matchedZone = null;
+
+    ARTICULATION_ZONES.forEach(zone => {
+        const isTypeMatch = artType === zone.id;
+        const hasPhonemeMatch = zone.phonemes.some(p => focusPhonemes.includes(p));
+        const isActive = isTypeMatch || hasPhonemeMatch;
+
+        if (isActive && !matchedZone) {
+            matchedZone = zone;
+        }
+
+        const card = document.createElement('div');
+        card.className = `art-zone-card p-3 rounded-2xl border text-center transition-all ${
+            isActive ? 'active-zone bg-indigo-50 border-indigo-400 font-bold shadow-xs' : 'bg-slate-50 border-slate-200 text-slate-600'
+        }`;
+        card.innerHTML = `
+            <div class="text-2xl mb-1">${zone.icon}</div>
+            <div class="text-xs font-extrabold ${isActive ? 'text-indigo-900' : 'text-slate-800'}">${zone.label}</div>
+            <div class="text-[10px] text-slate-500 font-mono mt-0.5">${zone.phonemes.slice(0, 3).map(p => `/${p}/`).join(' ')}</div>
+        `;
+
+        card.onclick = () => selectArticulationZone(zone);
+        grid.appendChild(card);
+    });
+
+    if (matchedZone) {
+        selectArticulationZone(matchedZone, ex);
+    } else {
+        selectArticulationZone(ARTICULATION_ZONES[0], ex);
+    }
+}
+
+// Seleccionar y mostrar explicación anatómica detallada
+function selectArticulationZone(zone, ex) {
+    const badge = document.getElementById('cz-badge');
+    const title = document.getElementById('cz-title');
+    const desc = document.getElementById('cz-desc');
+
+    if (badge) badge.textContent = zone.label;
+    if (title) title.textContent = `${zone.icon} ${zone.title}`;
+    if (desc) {
+        let text = zone.desc;
+        if (ex && ex.tip && (ex.articulation_type === zone.id || zone.phonemes.some(p => (ex.focus_phonemes || []).includes(p)))) {
+            text += ` <br><strong class="text-indigo-900">Consejo anatómico para este ejercicio:</strong> ${ex.tip}`;
+        }
+        desc.innerHTML = text;
     }
 }
 

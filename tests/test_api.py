@@ -42,15 +42,21 @@ def test_exercises_endpoints():
     res_de = client.get("/api/exercises?language=de-DE")
     assert res_de.status_code == 200
     exercises_de = res_de.json()
-    assert len(exercises_de) > 0
+    assert len(exercises_de) >= 12
     assert any(e["category"] == "ich-Laut vs ach-Laut" for e in exercises_de)
+    assert any(e["category"] == "Pares Mínimos Vocálicos" for e in exercises_de)
+    assert any(e["category"] == "Zungenbrecher (Trabalenguas)" for e in exercises_de)
+    assert any(e.get("articulation_type") == "palatal" for e in exercises_de)
 
     # Inglés
     res_en = client.get("/api/exercises?language=en-US")
     assert res_en.status_code == 200
     exercises_en = res_en.json()
-    assert len(exercises_en) > 0
+    assert len(exercises_en) >= 10
     assert any("TH" in e["category"] for e in exercises_en)
+    assert any(e["category"] == "Pares Mínimos Vocálicos" for e in exercises_en)
+    assert any(e["category"] == "Tongue Twisters (Trabalenguas)" for e in exercises_en)
+    assert any(e.get("articulation_type") == "dental" for e in exercises_en)
 
 
 def test_categories_endpoint():
