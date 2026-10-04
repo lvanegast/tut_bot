@@ -136,14 +136,24 @@ class TelegramCoachBot:
     async def _safe_edit_text(
         self, target, text: str, reply_markup=None, parse_mode=ParseMode.HTML
     ):
-        """Edita mensaje con HTML; si falla, reintenta sin formato."""
+        """Edita mensaje con HTML; soporta Message y CallbackQuery; si falla, reintenta sin formato."""
+        edit_func = getattr(target, "edit_message_text", None)
+        if edit_func is None:
+            edit_func = getattr(target, "edit_text", None)
+        if edit_func is None and hasattr(target, "message"):
+            edit_func = getattr(target.message, "edit_text", None)
+
+        if edit_func is None:
+            logger.error(f"Target {type(target)} no soporta edición de texto")
+            return None
+
         try:
-            return await target.edit_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+            return await edit_func(text, reply_markup=reply_markup, parse_mode=parse_mode)
         except Exception as e:
             logger.warning(
                 f"Error en edit_text con parse_mode {parse_mode}: {e}. Reintentando texto plano."
             )
-            return await target.edit_text(
+            return await edit_func(
                 self._strip_html(text), reply_markup=reply_markup, parse_mode=None
             )
 
