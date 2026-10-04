@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import List
+from typing import List, Optional
 
 from tut_bot.config import settings
 from tut_bot.models.schemas import WordScore, WritingEvaluationResponse
@@ -324,6 +324,7 @@ class GeminiCoachService:
         question: str,
         target_answer: str,
         language: str = "de-DE",
+        options: Optional[List[str]] = None,
     ) -> dict:
         """Evalúa si la respuesta del usuario demuestra comprensión del audio escuchado."""
         clean_user = user_answer.strip()
@@ -336,6 +337,14 @@ class GeminiCoachService:
                 "is_correct": True,
                 "feedback": "¡Entendiste el audio perfectamente! Captaste el dato clave a la primera.",
             }
+
+        options_section = ""
+        if options:
+            opts_formatted = "\n".join([f"{i + 1}. {opt}" for i, opt in enumerate(options)])
+            options_section = (
+                f"\nOpciones del ejercicio:\n{opts_formatted}\n"
+                f"Nota: Si el alumno responde con el número (ej: '1'), letra o texto de la opción correcta, evalúala como correcta.\n"
+            )
 
         if not self.is_available() or settings.is_mock_mode:
             is_ok = any(word in clean_user.lower() for word in clean_target.lower().split())
@@ -351,6 +360,7 @@ class GeminiCoachService:
             f"Un alumno de {lang_name} escuchó un audio con este texto: '{audio_transcript}'.\n"
             f"Pregunta formulada: {question}\n"
             f"Respuesta esperada: '{clean_target}'\n"
+            f"{options_section}"
             f"Respuesta que dio el alumno: '{clean_user}'\n\n"
             f"¿El alumno comprendió el significado correctamente? Responde en JSON:\n"
             f'{{"score": 90, "is_correct": true, "feedback": "Breve retroalimentación en español (1-2 frases)"}}'

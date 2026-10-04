@@ -1010,6 +1010,90 @@ class TelegramCoachBot:
             idx = state["exercise_index"] % len(exercises)
             ex = exercises[idx]
 
+            # 3.1 Detección inteligente de opción (si el ejercicio tiene opciones múltiples)
+            selected_option_idx = None
+            clean_text = text.strip().lower()
+
+            if ex.options:
+                # Detección de dígitos: "1", "2", "3", "1.", "#1", "opción 1", "opcion 1", "la 1", "el 1"
+                num_match = re.match(
+                    r"^(?:opci[oó]n|la|el|número|numero)?\s*#?([1-9])(?:\ufe0f?\u20e3)?\.?$",
+                    clean_text,
+                )
+                if num_match:
+                    idx_candidate = int(num_match.group(1)) - 1
+                    if 0 <= idx_candidate < len(ex.options):
+                        selected_option_idx = idx_candidate
+
+                # Detección de letras: "a", "b", "c", "opción a", etc.
+                if selected_option_idx is None:
+                    letter_match = re.match(r"^(?:opci[oó]n|la|el)?\s*([a-d])\.?$", clean_text)
+                    if letter_match:
+                        idx_candidate = ord(letter_match.group(1)) - ord("a")
+                        if 0 <= idx_candidate < len(ex.options):
+                            selected_option_idx = idx_candidate
+
+                # Detección por texto contenido en alguna opción (ej: "19,50" o "neunzehn")
+                if selected_option_idx is None:
+                    for i, opt in enumerate(ex.options):
+                        opt_lower = opt.lower()
+                        words = [
+                            w
+                            for w in clean_text.replace(",", " ").replace(".", " ").split()
+                            if len(w) >= 3
+                        ]
+                        if clean_text in opt_lower or (
+                            words and all(w in opt_lower for w in words)
+                        ):
+                            selected_option_idx = i
+                            break
+
+            # Si el usuario seleccionó una opción válida del ejercicio
+            if selected_option_idx is not None and ex.options:
+                is_correct = selected_option_idx == ex.correct_option_index
+                chosen_str = ex.options[selected_option_idx]
+                correct_str = (
+                    ex.options[ex.correct_option_index]
+                    if ex.correct_option_index is not None
+                    and ex.correct_option_index < len(ex.options)
+                    else ex.translation_es
+                )
+
+                if is_correct:
+                    res_msg = (
+                        f"🟢 <b>¡Correcto!</b> 🎉\n\n"
+                        f"Seleccionaste: <b>{selected_option_idx + 1}️⃣ {chosen_str}</b>\n"
+                        f"¡Has comprendido el audio perfectamente!\n\n"
+                        f'📖 <b>Transcripción:</b> <i>"{ex.target_text}"</i>\n'
+                        f'🇪🇸 <b>Significado:</b> <i>"{ex.translation_es}"</i>'
+                    )
+                else:
+                    res_msg = (
+                        f"🔴 <b>Casi</b> 👍\n\n"
+                        f'Seleccionaste: <i>{selected_option_idx + 1}️⃣ "{chosen_str}"</i>\n'
+                        f'La respuesta correcta era la {ex.correct_option_index + 1}️⃣: <b>"{correct_str}"</b>\n\n'
+                        f'📖 <b>Transcripción:</b> <i>"{ex.target_text}"</i>\n'
+                        f'🇪🇸 <b>Significado:</b> <i>"{ex.translation_es}"</i>'
+                    )
+
+                keyboard = [
+                    [
+                        InlineKeyboardButton("➡️ Siguiente Ejercicio", callback_data="ex_next"),
+                        InlineKeyboardButton("🔄 Reintentar", callback_data="btn_exercise"),
+                    ],
+                    [
+                        InlineKeyboardButton("🔊 Volver a Escuchar", callback_data=f"tts_{ex.id}"),
+                        InlineKeyboardButton("📖 Vocabulario", callback_data="vocab_card"),
+                    ],
+                ]
+                await self._safe_reply_text(
+                    update.effective_message,
+                    res_msg,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                )
+                return
+
+            # Si no fue opción directa, evaluar con IA pasando las opciones
             await update.effective_message.reply_chat_action(ChatAction.TYPING)
             comp_res = gemini_coach.evaluate_comprehension(
                 user_answer=text,
@@ -1017,6 +1101,7 @@ class TelegramCoachBot:
                 question=ex.prompt or ex.title,
                 target_answer=ex.translation_es,
                 language=lang,
+                options=ex.options,
             )
 
             badge = (

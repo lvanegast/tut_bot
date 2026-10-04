@@ -208,12 +208,13 @@ def test_gemini_coach_multiskill():
     )
     assert "Krankenhaus" in vocab_explanation or len(vocab_explanation) > 10
 
-    # Prueba de evaluación de comprensión auditiva
+    # Prueba de evaluación de comprensión auditiva con opciones múltiples
     comp_eval = gemini_coach.evaluate_comprehension(
         user_answer="A las 08:00",
         audio_transcript="Der Zug fährt um 08:00 Uhr ab.",
         question="¿A qué hora sale el tren?",
         target_answer="A las 08:00",
+        options=["A las 07:00", "A las 08:00", "A las 09:00"],
     )
     assert comp_eval["is_correct"] is True
     assert comp_eval["score"] == 100.0
