@@ -61,6 +61,18 @@ class ProgressTracker:
                 """
             )
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_eval_user ON evaluations(user_id)")
+
+            # Migración ligera: añadir columnas si no existen
+            cursor.execute("PRAGMA table_info(user_states)")
+            cols = [c["name"] for c in cursor.fetchall()]
+            if "skill_mode" not in cols:
+                cursor.execute(
+                    "ALTER TABLE user_states ADD COLUMN skill_mode TEXT NOT NULL DEFAULT 'speaking'"
+                )
+            if "level" not in cols:
+                cursor.execute(
+                    "ALTER TABLE user_states ADD COLUMN level TEXT NOT NULL DEFAULT 'A1'"
+                )
             conn.commit()
 
     def get_user_state(self, user_id: str) -> Dict[str, Any]:
@@ -70,20 +82,23 @@ class ProgressTracker:
             cursor.execute("SELECT * FROM user_states WHERE user_id = ?", (user_id,))
             row = cursor.fetchone()
             if row:
+                row_dict = dict(row)
                 return {
-                    "user_id": row["user_id"],
-                    "language": row["language"],
-                    "exercise_index": row["exercise_index"],
-                    "custom_phrase": row["custom_phrase"],
-                    "updated_at": row["updated_at"],
+                    "user_id": row_dict["user_id"],
+                    "language": row_dict["language"],
+                    "exercise_index": row_dict["exercise_index"],
+                    "custom_phrase": row_dict["custom_phrase"],
+                    "skill_mode": row_dict.get("skill_mode", "speaking"),
+                    "level": row_dict.get("level", "A1"),
+                    "updated_at": row_dict["updated_at"],
                 }
 
             # Estado por defecto
             now = datetime.now(timezone.utc).isoformat()
             cursor.execute(
                 """
-                INSERT INTO user_states (user_id, language, exercise_index, custom_phrase, updated_at)
-                VALUES (?, 'de-DE', 0, NULL, ?)
+                INSERT INTO user_states (user_id, language, exercise_index, custom_phrase, skill_mode, level, updated_at)
+                VALUES (?, 'de-DE', 0, NULL, 'speaking', 'A1', ?)
                 """,
                 (user_id, now),
             )
@@ -93,6 +108,8 @@ class ProgressTracker:
                 "language": "de-DE",
                 "exercise_index": 0,
                 "custom_phrase": None,
+                "skill_mode": "speaking",
+                "level": "A1",
                 "updated_at": now,
             }
 
@@ -110,6 +127,34 @@ class ProgressTracker:
                     updated_at = excluded.updated_at
                 """,
                 (user_id, language, now),
+            )
+            conn.commit()
+
+    def set_user_skill_mode(self, user_id: str, skill_mode: str):
+        now = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE user_states
+                SET skill_mode = ?, exercise_index = 0, custom_phrase = NULL, updated_at = ?
+                WHERE user_id = ?
+                """,
+                (skill_mode, now, user_id),
+            )
+            conn.commit()
+
+    def set_user_level(self, user_id: str, level: str):
+        now = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE user_states
+                SET level = ?, exercise_index = 0, custom_phrase = NULL, updated_at = ?
+                WHERE user_id = ?
+                """,
+                (level, now, user_id),
             )
             conn.commit()
 

@@ -67,7 +67,6 @@ EXERCISES_DATABASE: List[Exercise] = [
         tip="Diferencia con precisión: /ç/ en 'Ich/möchte', /ks/ en 'sechs', /ʃ/ en 'frische/Fische' y /x/ en 'kochen'.",
         articulation_type="palatal",
     ),
-
     # 2. Vocales con diéresis (Umlauts: ä, ö, ü)
     Exercise(
         id="de-umlaut-01",
@@ -129,7 +128,6 @@ EXERCISES_DATABASE: List[Exercise] = [
         tip="Compara 'schon' (/oː/ posterior) con 'schöne' (/øː/ anterior redondeada con labios en óvalo cerrado).",
         articulation_type="vowel",
     ),
-
     # 3. Pares Mínimos Vocálicos Alemanes (Vocal Larga Tensa vs Corta Relajada)
     Exercise(
         id="de-vowel-len-01",
@@ -176,7 +174,6 @@ EXERCISES_DATABASE: List[Exercise] = [
         tip="'fühlen' tiene una 'ü' larga y tensa (/yː/). En 'füllen' la doble 'll' acorta la vocal a /ʏ/ relajada.",
         articulation_type="vowel",
     ),
-
     # 4. Sibilantes y Fricativas Alemanas (/s/ sorda vs /z/ sonora vs /ts/)
     Exercise(
         id="de-s-z-01",
@@ -193,7 +190,6 @@ EXERCISES_DATABASE: List[Exercise] = [
         tip="'reisen' tiene 's' intervocálica sonora (/z/, con vibración laríngea como abeja). 'reißen' (ß) es totalmente sorda (/s/).",
         articulation_type="alveolar",
     ),
-
     # 5. Auslautverhärtung (Ensordecimiento final de consonantes)
     Exercise(
         id="de-auslaut-01",
@@ -210,7 +206,6 @@ EXERCISES_DATABASE: List[Exercise] = [
         tip="Al final de palabra o sílaba en alemán, 'Tag' termina en sonido sordo /k/, y 'Bild' termina en sonido /t/ sin vibrar.",
         articulation_type="alveolar",
     ),
-
     # 6. R Alemana (Uvular /ʁ/ vs Vocalizada /ɐ/)
     Exercise(
         id="de-r-01",
@@ -227,7 +222,6 @@ EXERCISES_DATABASE: List[Exercise] = [
         tip="Al final de palabra (-er, der), la 'r' se vocaliza en /ɐ/ (suena como una 'a' corta y relajada). Al inicio, vibra suavemente en la campanilla.",
         articulation_type="uvular",
     ),
-
     # 7. Zungenbrecher (Trabalenguas)
     Exercise(
         id="de-tongue-twister-01",
@@ -244,7 +238,6 @@ EXERCISES_DATABASE: List[Exercise] = [
         tip="Combina con agilidad la fricativa postalveolar /ʃ/ con la africada /ts/ y la R uvular /ʁ/.",
         articulation_type="postalveolar",
     ),
-
     # 8. Vida Cotidiana A1-B1
     Exercise(
         id="de-daily-01",
@@ -276,7 +269,6 @@ EXERCISES_DATABASE: List[Exercise] = [
         tip="Cuida la entonación que desciende al final de la cláusula subordinada y la pronunciación de 'pünktlich'.",
         articulation_type="palatal",
     ),
-
     # =========================================================================
     # INGLÉS (en-US)
     # =========================================================================
@@ -326,7 +318,6 @@ EXERCISES_DATABASE: List[Exercise] = [
         tip="'Breath' termina en /θ/ sorda; 'breathe' tiene vocal larga /iː/ y termina en /ð/ sonora con vibración.",
         articulation_type="dental",
     ),
-
     # 2. Pares Mínimos Vocálicos (Interferencia común del español)
     Exercise(
         id="en-vowels-01",
@@ -388,7 +379,6 @@ EXERCISES_DATABASE: List[Exercise] = [
         tip="No sustituyas todas por la 'o' española: /ɔː/ es abierta y posterior, mientras que /oʊ/ en 'coat' es un diptongo dinámico.",
         articulation_type="vowel",
     ),
-
     # 3. Labiodental V (/v/) vs Bilabial B (/b/)
     Exercise(
         id="en-b-v-01",
@@ -405,7 +395,6 @@ EXERCISES_DATABASE: List[Exercise] = [
         tip="En español no diferenciamos B de V. En inglés, para la 'V' tus dientes superiores DEBEN tocar el labio inferior con fricción acústica continua.",
         articulation_type="labiodental",
     ),
-
     # 4. Semivocal W (/w/) vs Labiodental V (/v/)
     Exercise(
         id="en-w-v-01",
@@ -422,7 +411,6 @@ EXERCISES_DATABASE: List[Exercise] = [
         tip="Para 'W' (/w/), los dientes NUNCA tocan los labios (redondea como una 'u'). Para 'V' (/v/), los dientes superiores rozan el labio inferior.",
         articulation_type="labiodental",
     ),
-
     # 5. Líquidas y Aproximantes (R rótica /ɹ/ vs L lateral /l/)
     Exercise(
         id="en-r-l-01",
@@ -439,7 +427,6 @@ EXERCISES_DATABASE: List[Exercise] = [
         tip="Para la 'R' en inglés americano (/ɹ/), la lengua se curva hacia atrás sin tocar el paladar ni vibrar. Para la 'L' (/l/), la punta toca firmemente detrás de los dientes.",
         articulation_type="alveolar",
     ),
-
     # 6. Terminaciones Morfológicas Gramaticales (-ed endings: /t/, /d/, /ɪd/)
     Exercise(
         id="en-endings-ed-01",
@@ -456,7 +443,6 @@ EXERCISES_DATABASE: List[Exercise] = [
         tip="'walked' termina en sonido seco /t/; 'played' termina en sonido sonoro /d/; solo 'waited' (tras sonido t/d) añade una sílaba extra /ɪd/.",
         articulation_type="alveolar",
     ),
-
     # 7. Tongue Twisters (Trabalenguas en Inglés)
     Exercise(
         id="en-tongue-twister-01",
@@ -473,7 +459,6 @@ EXERCISES_DATABASE: List[Exercise] = [
         tip="Entrena la transición veloz entre la sibilante alveolar /s/ en 'sells/sea' y la postalveolar /ʃ/ en 'she/shells/shore'.",
         articulation_type="postalveolar",
     ),
-
     # 8. Conversación Cotidiana
     Exercise(
         id="en-daily-01",
@@ -490,11 +475,249 @@ EXERCISES_DATABASE: List[Exercise] = [
         tip="Enfócate en la fluidez del ritmo y la reducción de sonidos no acentuados ('would', 'your').",
         articulation_type="postalveolar",
     ),
+    # =========================================================================
+    # ALEMÁN - ESCRITURA (Schreiben) A1, A2, B1
+    # =========================================================================
+    Exercise(
+        id="de-write-01",
+        language="de-DE",
+        category="Oraciones Básicas y Presentación",
+        level="A1",
+        skill_type="writing",
+        title="Presentación y Lugar de Residencia",
+        prompt="✍️ Escribe en alemán: 'Hola, me llamo Carlos y vivo en Berlín.'",
+        target_text="Hallo, ich heiße Carlos und ich wohne in Berlin.",
+        translation_es="Hola, me llamo Carlos y vivo en Berlín.",
+        tip="Recuerda conjugar los verbos en primera persona: 'ich heiße' y 'ich wohne'.",
+        vocabulary_breakdown={
+            "heißen": "llamarse (ich heiße, du heißt)",
+            "wohnen": "vivir / residir (ich wohne)",
+            "und": "y (conjunción)",
+            "in": "en (preposición de lugar)",
+        },
+        grammar_note="En alemán los nombres propios y las ciudades se escriben con mayúscula inicial.",
+    ),
+    Exercise(
+        id="de-write-02",
+        language="de-DE",
+        category="Artículos y Acusativo",
+        level="A1",
+        skill_type="writing",
+        title="Mascotas y Objeto Directo (Akkusativ)",
+        prompt="✍️ Traduce al alemán: 'Tengo un perro y una gata.' (Ojo con el artículo de perro: der Hund)",
+        target_text="Ich habe einen Hund und eine Katze.",
+        translation_es="Tengo un perro y una gata.",
+        tip="El verbo 'haben' rige Acusativo. El masculino 'der Hund' se convierte en 'einen Hund', mientras el femenino 'eine Katze' se mantiene.",
+        vocabulary_breakdown={
+            "haben": "tener (ich habe)",
+            "der Hund": "el perro ➔ acusativo: einen Hund",
+            "die Katze": "la gata / gato hembra ➔ acusativo: eine Katze",
+        },
+        grammar_note="En alemán TODOS los sustantivos (Hund, Katze, etc.) se escriben con mayúscula inicial obligatoria.",
+    ),
+    Exercise(
+        id="de-write-03",
+        language="de-DE",
+        category="Pasado Perfekt",
+        level="A2",
+        skill_type="writing",
+        title="Acciones Pasadas Cotidianas",
+        prompt="✍️ Escribe en pasado (Perfekt): 'Ayer compré un café.'",
+        target_text="Gestern habe ich einen Kaffee gekauft.",
+        translation_es="Ayer compré un café.",
+        tip="Estructura del Perfekt: Verbo auxiliar (habe) en posición 2 y participio (gekauft) al final de la oración.",
+        vocabulary_breakdown={
+            "gestern": "ayer",
+            "kaufen": "comprar (participio: gekauft)",
+            "der Kaffee": "el café ➔ acusativo: einen Kaffee",
+        },
+        grammar_note="Si la oración comienza con un adverbio de tiempo como 'Gestern', el sujeto y el verbo se invierten (inversión sujeto-verbo).",
+    ),
+    Exercise(
+        id="de-write-04",
+        language="de-DE",
+        category="Oraciones Subordinadas (weil)",
+        level="A2",
+        skill_type="writing",
+        title="Dar Razones con 'weil'",
+        prompt="✍️ Une con 'weil' (porque): 'Aprendo alemán porque es interesante.'",
+        target_text="Ich lerne Deutsch, weil es interessant ist.",
+        translation_es="Aprendo alemán porque es interesante.",
+        tip="La conjunción subordinante 'weil' envía el verbo conjugado ('ist') al final absoluto de la cláusula.",
+        vocabulary_breakdown={
+            "lernen": "aprender",
+            "weil": "porque (conjunción que altera el orden)",
+            "interessant": "interesante",
+            "ist": "es / está (verbo sein)",
+        },
+        grammar_note="Regla de oro: Antes de 'weil' siempre se escribe una coma (, weil ... verb final).",
+    ),
+    Exercise(
+        id="de-write-05",
+        language="de-DE",
+        category="Cortesía y Negocios (B1)",
+        level="B1",
+        skill_type="writing",
+        title="Solicitud Formal de Cita",
+        prompt="✍️ Escribe con cortesía formal: 'Me gustaría acordar una cita, por favor.'",
+        target_text="Ich möchte bitte einen Termin vereinbaren.",
+        translation_es="Me gustaría acordar una cita, por favor.",
+        tip="Usa 'möchte' + infinitivo al final ('vereinbaren'). 'Der Termin' pasa a 'einen Termin' en acusativo.",
+        vocabulary_breakdown={
+            "möchte": "me gustaría (forma de cortesía)",
+            "der Termin": "la cita profesional o médica",
+            "vereinbaren": "pactar / agendar",
+            "bitte": "por favor",
+        },
+        grammar_note="Los verbos modales colocan el segundo verbo en infinitivo al final de la frase.",
+    ),
+    # =========================================================================
+    # ALEMÁN - COMPRENSIÓN AUDITIVA (Hören) A1, A2
+    # =========================================================================
+    Exercise(
+        id="de-listen-01",
+        language="de-DE",
+        category="Horarios y Números (Hören)",
+        level="A1",
+        skill_type="listening",
+        title="¿A qué hora es la reunión?",
+        prompt="👂 Escucha el audio nativo y selecciona la hora exacta que se indica:",
+        target_text="Das Treffen beginnt um Viertel vor acht.",
+        translation_es="La reunión comienza a las ocho menos cuarto (7:45).",
+        tip="Presta atención a 'Viertel vor' (un cuarto antes de...) vs 'Viertel nach'.",
+        options=[
+            "7:45 (Viertel vor acht)",
+            "8:15 (Viertel nach acht)",
+            "8:45 (Viertel vor neun)",
+        ],
+        correct_option_index=0,
+        vocabulary_breakdown={
+            "das Treffen": "la reunión / encuentro",
+            "beginnt": "comienza (beginnen)",
+            "Viertel": "cuarto de hora (15 minutos)",
+            "vor": "antes de (menos)",
+        },
+        grammar_note="Para las horas en alemán informal: 'Viertel vor' resta 15 minutos a la hora siguiente.",
+    ),
+    Exercise(
+        id="de-listen-02",
+        language="de-DE",
+        category="Profesiones y Lugares (Hören)",
+        level="A1",
+        skill_type="listening",
+        title="¿En qué trabaja Maria?",
+        prompt="👂 Escucha el audio y elige a qué se dedica Maria:",
+        target_text="Maria arbeitet als Ärztin in einem großen Krankenhaus.",
+        translation_es="Maria trabaja como médica en un hospital grande.",
+        tip="Escucha la palabra compuesta 'Krankenhaus' y la profesión 'Ärztin'.",
+        options=[
+            "Es profesora en una universidad",
+            "Es médica en un hospital",
+            "Es abogada en una oficina",
+        ],
+        correct_option_index=1,
+        vocabulary_breakdown={
+            "arbeiten als": "trabajar como (profesión)",
+            "die Ärztin": "la médica",
+            "das Krankenhaus": "el hospital (Kranken = enfermos + Haus = casa)",
+            "groß": "grande",
+        },
+    ),
+    # =========================================================================
+    # INGLÉS - ESCRITURA (Writing) A1, A2, B1
+    # =========================================================================
+    Exercise(
+        id="en-write-01",
+        language="en-US",
+        category="Present Simple y Rutinas",
+        level="A1",
+        skill_type="writing",
+        title="Tercera Persona en Presente",
+        prompt="✍️ Escribe en inglés: 'Ella trabaja en un banco y vive cerca de aquí.'",
+        target_text="She works in a bank and lives near here.",
+        translation_es="Ella trabaja en un banco y vive cerca de aquí.",
+        tip="En presente simple con he/she/it, no olvides añadir la '-s' final a los verbos: 'works' y 'lives'.",
+        vocabulary_breakdown={
+            "works": "trabaja (work + s)",
+            "lives": "vive (live + s)",
+            "bank": "banco",
+            "near here": "cerca de aquí",
+        },
+        grammar_note="La tercera persona del singular en inglés requiere -s o -es en afirmativo.",
+    ),
+    Exercise(
+        id="en-write-02",
+        language="en-US",
+        category="Past Simple Irregular",
+        level="A2",
+        skill_type="writing",
+        title="Objetos Perdidos en Pasado",
+        prompt="✍️ Traduce al inglés en pasado simple: 'Ayer encontré mis llaves debajo de la cama.'",
+        target_text="Yesterday I found my keys under the bed.",
+        translation_es="Ayer encontré mis llaves debajo de la cama.",
+        tip="'find' es un verbo irregular: su pasado simple es 'found', no 'finded'.",
+        vocabulary_breakdown={
+            "found": "encontré (pasado de find)",
+            "keys": "llaves",
+            "under": "debajo de",
+            "bed": "cama",
+        },
+        grammar_note="Los verbos irregulares en inglés cambian su raíz en pasado simple.",
+    ),
+    Exercise(
+        id="en-write-03",
+        language="en-US",
+        category="Present Perfect vs Past Simple",
+        level="B1",
+        skill_type="writing",
+        title="Experiencia y Duración en el Tiempo",
+        prompt="✍️ Traduce usando Present Perfect: 'He vivido en esta ciudad durante tres años.'",
+        target_text="I have lived in this city for three years.",
+        translation_es="He vivido en esta ciudad durante tres años.",
+        tip="Usa 'for' para indicar duración ('for three years') y 'since' para un punto de inicio específico.",
+        vocabulary_breakdown={
+            "have lived": "he vivido (present perfect)",
+            "for": "durante (periodo de tiempo acumulado)",
+            "since": "desde (año o fecha específica)",
+            "city": "ciudad",
+        },
+        grammar_note="El Present Perfect conecta una acción que empezó en el pasado y continúa en el presente.",
+    ),
+    # =========================================================================
+    # INGLÉS - COMPRENSIÓN AUDITIVA (Listening) A1, A2
+    # =========================================================================
+    Exercise(
+        id="en-listen-01",
+        language="en-US",
+        category="Situaciones Cotidianas (Listening)",
+        level="A1",
+        skill_type="listening",
+        title="Aviso en el Aeropuerto",
+        prompt="👂 Escucha el anuncio de voz y responde: ¿Por qué se canceló el vuelo?",
+        target_text="Attention passengers, flight 402 is cancelled due to heavy rain.",
+        translation_es="Atención pasajeros, el vuelo 402 está cancelado debido a lluvia intensa.",
+        tip="Identifica la expresión 'due to' (debido a) y la condición climática.",
+        options=[
+            "Por lluvia intensa (heavy rain)",
+            "Por fallas mecánicas en el avión",
+            "Por huelga del personal del aeropuerto",
+        ],
+        correct_option_index=0,
+        vocabulary_breakdown={
+            "due to": "debido a / a causa de",
+            "cancelled": "cancelado",
+            "heavy rain": "lluvia intensa",
+            "flight": "vuelo",
+        },
+    ),
 ]
 
 
 def get_exercises(
-    language: Optional[str] = None, category: Optional[str] = None, level: Optional[str] = None
+    language: Optional[str] = None,
+    category: Optional[str] = None,
+    level: Optional[str] = None,
+    skill_type: Optional[str] = None,
 ) -> List[Exercise]:
     results = EXERCISES_DATABASE
     if language:
@@ -503,6 +726,13 @@ def get_exercises(
         results = [e for e in results if e.category.lower() == category.lower()]
     if level:
         results = [e for e in results if e.level.lower() == level.lower()]
+    if skill_type:
+        target_skill = (
+            "listening"
+            if skill_type.lower() in ("listening", "comprehension")
+            else skill_type.lower()
+        )
+        results = [e for e in results if (e.skill_type or "speaking").lower() == target_skill]
     return results
 
 

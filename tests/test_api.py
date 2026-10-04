@@ -126,10 +126,14 @@ def test_progress_tracker():
 
     user_id = "test_unit_user_01"
     tracker.set_user_language(user_id, "de-DE")
+    tracker.set_user_skill_mode(user_id, "writing")
+    tracker.set_user_level(user_id, "A2")
     tracker.set_user_exercise_index(user_id, 3)
     state = tracker.get_user_state(user_id)
     assert state["language"] == "de-DE"
     assert state["exercise_index"] == 3
+    assert state["skill_mode"] == "writing"
+    assert state["level"] == "A2"
 
     tracker.record_evaluation(
         user_id=user_id,
@@ -145,6 +149,74 @@ def test_progress_tracker():
     stats = tracker.get_user_stats(user_id)
     assert stats["total_attempts"] >= 1
     assert any(item["phoneme"] == "ç" for item in stats["weak_phonemes_top"])
+
+
+def test_exercises_skill_and_level_filtering():
+    from tut_bot.services.exercises import get_exercises
+
+    # Habla A1 en alemán
+    de_speaking_a1 = get_exercises(language="de-DE", level="A1", skill_type="speaking")
+    assert len(de_speaking_a1) > 0
+    assert all(e.skill_type == "speaking" for e in de_speaking_a1)
+
+    # Escritura A1 en alemán
+    de_writing_a1 = get_exercises(language="de-DE", level="A1", skill_type="writing")
+    assert len(de_writing_a1) > 0
+    assert all(e.skill_type == "writing" for e in de_writing_a1)
+    assert de_writing_a1[0].prompt is not None
+
+    # Comprensión auditiva A1 en alemán (soporta 'listening' y alias 'comprehension')
+    de_comp_a1 = get_exercises(language="de-DE", level="A1", skill_type="listening")
+    assert len(de_comp_a1) > 0
+    assert all(e.skill_type == "listening" for e in de_comp_a1)
+    assert len(de_comp_a1[0].options) > 0
+
+    de_comp_alias = get_exercises(language="de-DE", level="A1", skill_type="comprehension")
+    assert len(de_comp_alias) == len(de_comp_a1)
+
+    # Escritura en inglés
+    en_writing = get_exercises(language="en-US", skill_type="writing")
+    assert len(en_writing) > 0
+
+
+def test_gemini_coach_multiskill():
+    from tut_bot.services.gemini_coach import gemini_coach
+
+    # Prueba de evaluación de escritura con coincidencia exacta
+    res_exact = gemini_coach.evaluate_writing(
+        user_input="Ich heiße Lucas.",
+        target_text="Ich heiße Lucas.",
+        prompt="Escribe en alemán: 'Me llamo Lucas.'",
+        language="de-DE",
+    )
+    assert res_exact.is_correct is True
+    assert res_exact.score == 100.0
+
+    # Prueba de evaluación de escritura con texto diferente
+    res_diff = gemini_coach.evaluate_writing(
+        user_input="Mein Name ist Lucas",
+        target_text="Ich heiße Lucas.",
+        prompt="Escribe en alemán: 'Me llamo Lucas.'",
+        language="de-DE",
+    )
+    assert res_diff.score is not None
+    assert res_diff.pedagogical_feedback is not None
+
+    # Prueba de explicación de vocabulario
+    vocab_explanation = gemini_coach.explain_vocabulary(
+        term_or_phrase="Krankenhaus", language="de-DE"
+    )
+    assert "Krankenhaus" in vocab_explanation or len(vocab_explanation) > 10
+
+    # Prueba de evaluación de comprensión auditiva
+    comp_eval = gemini_coach.evaluate_comprehension(
+        user_answer="A las 08:00",
+        audio_transcript="Der Zug fährt um 08:00 Uhr ab.",
+        question="¿A qué hora sale el tren?",
+        target_answer="A las 08:00",
+    )
+    assert comp_eval["is_correct"] is True
+    assert comp_eval["score"] == 100.0
 
 
 def test_telegram_bot_service():
@@ -165,5 +237,7 @@ if __name__ == "__main__":
     test_stats_endpoint()
     test_audio_converter_pipeline()
     test_progress_tracker()
+    test_exercises_skill_and_level_filtering()
+    test_gemini_coach_multiskill()
     test_telegram_bot_service()
     print("\n[EXITO] Todas las pruebas unitarias pasaron correctamente!")

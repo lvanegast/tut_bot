@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import tempfile
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -17,8 +18,6 @@ from tut_bot.services.exercises import get_categories, get_exercises
 from tut_bot.services.gemini_coach import gemini_coach
 from tut_bot.services.telegram_bot import telegram_bot
 from tut_bot.services.tracker import tracker
-
-import time
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("tut_bot")

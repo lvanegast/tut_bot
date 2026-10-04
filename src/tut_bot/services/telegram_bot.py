@@ -124,9 +124,7 @@ class TelegramCoachBot:
     ):
         """Envía respuesta con HTML; si falla el formateo, reintenta sin formato para nunca callarse."""
         try:
-            return await message.reply_text(
-                text, reply_markup=reply_markup, parse_mode=parse_mode
-            )
+            return await message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
         except Exception as e:
             logger.warning(
                 f"Error en reply_text con parse_mode {parse_mode}: {e}. Reintentando texto plano."
@@ -140,9 +138,7 @@ class TelegramCoachBot:
     ):
         """Edita mensaje con HTML; si falla, reintenta sin formato."""
         try:
-            return await target.edit_text(
-                text, reply_markup=reply_markup, parse_mode=parse_mode
-            )
+            return await target.edit_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
         except Exception as e:
             logger.warning(
                 f"Error en edit_text con parse_mode {parse_mode}: {e}. Reintentando texto plano."
@@ -156,9 +152,7 @@ class TelegramCoachBot:
     ):
         """Envía mensaje a chat con HTML; si falla, reintenta sin formato."""
         try:
-            return await chat.send_message(
-                text, reply_markup=reply_markup, parse_mode=parse_mode
-            )
+            return await chat.send_message(text, reply_markup=reply_markup, parse_mode=parse_mode)
         except Exception as e:
             logger.warning(
                 f"Error en send_message con parse_mode {parse_mode}: {e}. Reintentando texto plano."
@@ -185,18 +179,13 @@ class TelegramCoachBot:
                 self.cmd_exercise,
             )
         )
-        app.add_handler(
-            CommandHandler(["idioma", "lang", "language"], self.cmd_language)
-        )
-        app.add_handler(
-            CommandHandler(["libre", "custom", "fraselibre"], self.cmd_custom_phrase)
-        )
-        app.add_handler(
-            CommandHandler(["stats", "estadisticas", "progreso"], self.cmd_stats)
-        )
-        app.add_handler(
-            CommandHandler(["web", "panel", "link", "dashboard"], self.cmd_web)
-        )
+        app.add_handler(CommandHandler(["idioma", "lang", "language"], self.cmd_language))
+        app.add_handler(CommandHandler(["modo", "skill", "habilidad"], self.cmd_mode))
+        app.add_handler(CommandHandler(["nivel", "level"], self.cmd_level))
+        app.add_handler(CommandHandler(["palabra", "vocabulario", "definir"], self.cmd_vocab))
+        app.add_handler(CommandHandler(["libre", "custom", "fraselibre"], self.cmd_custom_phrase))
+        app.add_handler(CommandHandler(["stats", "estadisticas", "progreso"], self.cmd_stats))
+        app.add_handler(CommandHandler(["web", "panel", "link", "dashboard"], self.cmd_web))
 
         # Callback queries de botones inline
         app.add_handler(CallbackQueryHandler(self.handle_callback))
@@ -205,9 +194,7 @@ class TelegramCoachBot:
         app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, self.handle_voice))
 
         # Mensajes de texto normales
-        app.add_handler(
-            MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text)
-        )
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text))
 
         # Catch-all para comandos no reconocidos
         app.add_handler(MessageHandler(filters.COMMAND, self.cmd_unknown))
@@ -218,9 +205,7 @@ class TelegramCoachBot:
         self.app = app
         return app
 
-    async def error_handler(
-        self, update: object, context: ContextTypes.DEFAULT_TYPE
-    ):
+    async def error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE):
         """Captura cualquier excepción no manejada para que el bot nunca se bloquee ni quede callado."""
         logger.error(
             f"Excepción en Telegram update: {context.error}",
@@ -235,15 +220,10 @@ class TelegramCoachBot:
             except Exception:
                 pass
 
-    async def cmd_unknown(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ):
+    async def cmd_unknown(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Maneja comandos desconocidos o con erratas."""
         cmd_text = (update.effective_message.text or "").strip().lower()
-        if any(
-            typo in cmd_text
-            for typo in ["strar", "star", "stat", "starr", "st"]
-        ):
+        if any(typo in cmd_text for typo in ["strar", "star", "stat", "starr", "st"]):
             await self.cmd_start(update, context)
             return
 
@@ -254,16 +234,8 @@ class TelegramCoachBot:
             "• O simplemente <b>mantén presionado el micrófono 🎙️</b> para enviar una nota de voz."
         )
         keyboard = [
-            [
-                InlineKeyboardButton(
-                    "📚 Ir al Ejercicio", callback_data="btn_exercise"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "🏠 Menú Principal", callback_data="btn_start_menu"
-                )
-            ],
+            [InlineKeyboardButton("📚 Ir al Ejercicio", callback_data="btn_exercise")],
+            [InlineKeyboardButton("🏠 Menú Principal", callback_data="btn_start_menu")],
         ]
         await self._safe_reply_text(
             update.effective_message,
@@ -271,42 +243,41 @@ class TelegramCoachBot:
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
 
-    async def cmd_start(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ):
-        """Mensaje de bienvenida y selección de idioma inicial."""
+    async def cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Mensaje de bienvenida y selección de modalidad e idioma inicial."""
         user_id = f"tg_{update.effective_user.id}"
         state = tracker.get_user_state(user_id)
-        lang_flag = (
-            "🇩🇪 Alemán" if state["language"].startswith("de") else "🇺🇸 Inglés"
-        )
+        lang_flag = "🇩🇪 Alemán" if state["language"].startswith("de") else "🇺🇸 Inglés"
+        skill_names = {
+            "speaking": "🗣️ Hablar",
+            "writing": "✍️ Escribir",
+            "listening": "👂 Comprender",
+        }
+        current_skill = skill_names.get(state.get("skill_mode", "speaking"), "🗣️ Hablar")
+        current_level = state.get("level", "A1")
 
         welcome_text = (
             "🎙️ <b>¡Bienvenido a tut_bot!</b>\n"
-            "Tu entrenador fonético inteligente para <b>Alemán</b> e <b>Inglés</b>, impulsado por "
-            "<b>Azure Speech (IPA)</b> y <b>Google Gemini</b>.\n\n"
-            "⚡ <b>¿Cómo funciona?</b>\n"
-            "1️⃣ Pide un ejercicio con /ejercicio o escribe una frase libre.\n"
-            "2️⃣ Escucha la referencia nativa con el botón de audio.\n"
-            "3️⃣ <b>Envía una nota de voz</b> manteniendo presionado el micrófono 🎙️.\n"
-            "4️⃣ Recibe tu desglose de fonemas, pronunciación amigable y consejos anatómicos para tu lengua y labios.\n\n"
-            f"🌐 <b>Idioma actual:</b> {lang_flag}"
+            "Tu tutor integral inteligente para <b>Alemán</b> e <b>Inglés</b> con <b>Azure Speech (IPA)</b> y <b>Google Gemini</b>.\n\n"
+            "🎯 <b>3 Habilidades de Aprendizaje:</b>\n"
+            "• 🗣️ <b>Hablar:</b> Diagnóstico acústico de fonemas con notas de voz.\n"
+            "• ✍️ <b>Escribir:</b> Redacción, declinaciones y corrección gramatical inmediata.\n"
+            "• 👂 <b>Comprender:</b> Audición nativa, responder preguntas y aprender vocabulario.\n\n"
+            f"🌐 <b>Idioma:</b> {lang_flag} | <b>Nivel:</b> {current_level} | <b>Modo:</b> {current_skill}\n\n"
+            "💡 <i>¿Tienes duda con una palabra? Escribe <code>/palabra término</code> en cualquier momento.</i>"
         )
 
         keyboard = [
+            [
+                InlineKeyboardButton("🎯 Modo y Nivel", callback_data="btn_mode_menu"),
+                InlineKeyboardButton("📚 Ir al Ejercicio", callback_data="btn_exercise"),
+            ],
             [
                 InlineKeyboardButton("🇩🇪 Alemán", callback_data="lang_de"),
                 InlineKeyboardButton("🇺🇸 Inglés", callback_data="lang_en"),
             ],
             [
-                InlineKeyboardButton(
-                    "📚 Empezar Ejercicio", callback_data="btn_exercise"
-                ),
-                InlineKeyboardButton(
-                    "📊 Mis Estadísticas", callback_data="btn_stats"
-                ),
-            ],
-            [
+                InlineKeyboardButton("📊 Mis Estadísticas", callback_data="btn_stats"),
                 InlineKeyboardButton("🌐 Panel Web", callback_data="btn_web"),
             ],
         ]
@@ -316,23 +287,92 @@ class TelegramCoachBot:
             update.effective_message, welcome_text, reply_markup=reply_markup
         )
 
-    async def cmd_help(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ):
+    async def cmd_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         help_text = (
             "📖 <b>Comandos disponibles en tut_bot:</b>\n\n"
-            "• <b>/ejercicio</b> — Muestra la frase fonética para practicar.\n"
+            "• <b>/ejercicio</b> — Muestra el ejercicio activo según tu modo y nivel.\n"
+            "• <b>/modo</b> — Cambia entre 🗣️ Hablar, ✍️ Escribir y 👂 Comprender.\n"
+            "• <b>/nivel</b> — Elige tu nivel MCER (A1, A2, B1).\n"
+            "• <b>/palabra &lt;término&gt;</b> — Consulta el significado, género o ejemplos de cualquier palabra.\n"
             "• <b>/idioma</b> — Alterna entre Alemán (de-DE) e Inglés (en-US).\n"
             "• <b>/libre &lt;frase&gt;</b> — Configura cualquier frase que desees pronunciar.\n"
             "• <b>/stats</b> — Muestra tu puntuación promedio y fonemas a mejorar.\n"
-            "• <b>/web</b> — Enlace al panel web en tu PC.\n\n"
-            "🎙️ <b>Simplemente envía una nota de voz</b> cuando estés listo para evaluar tu pronunciación."
+            "• <b>/web</b> — Enlace al panel web en tu PC."
         )
         await self._safe_reply_text(update.effective_message, help_text)
 
-    async def cmd_language(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ):
+    async def cmd_mode(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Menú interactivo para cambiar Modalidad y Nivel MCER."""
+        user_id = f"tg_{update.effective_user.id}"
+        state = tracker.get_user_state(user_id)
+        current_skill = state.get("skill_mode", "speaking")
+        current_level = state.get("level", "A1")
+        lang_flag = "🇩🇪 Alemán" if state["language"].startswith("de") else "🇺🇸 Inglés"
+
+        skill_labels = {
+            "speaking": "🗣️ Hablar (Pronunciación IPA)",
+            "writing": "✍️ Escribir (Gramática y Traducción)",
+            "listening": "👂 Comprender (Audición y Vocabulario)",
+        }
+
+        msg = (
+            f"🎯 <b>Configuración de Entrenamiento</b>\n\n"
+            f"• <b>Idioma:</b> {lang_flag}\n"
+            f"• <b>Modalidad Actual:</b> {skill_labels.get(current_skill, current_skill)}\n"
+            f"• <b>Nivel MCER:</b> {current_level}\n\n"
+            f"👇 <b>Elige qué habilidad deseas practicar o cambia tu nivel:</b>"
+        )
+
+        keyboard = [
+            [
+                InlineKeyboardButton("🗣️ Hablar", callback_data="mode_speaking"),
+                InlineKeyboardButton("✍️ Escribir", callback_data="mode_writing"),
+                InlineKeyboardButton("👂 Comprender", callback_data="mode_listening"),
+            ],
+            [
+                InlineKeyboardButton("🟢 A1 (Básico)", callback_data="level_A1"),
+                InlineKeyboardButton("🟡 A2 (Elemental)", callback_data="level_A2"),
+                InlineKeyboardButton("🔵 B1 (Intermedio)", callback_data="level_B1"),
+            ],
+            [
+                InlineKeyboardButton("📚 Ir al Ejercicio", callback_data="btn_exercise"),
+                InlineKeyboardButton("🏠 Menú Principal", callback_data="btn_start_menu"),
+            ],
+        ]
+        await self._safe_reply_text(
+            update.effective_message, msg, reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+    async def cmd_level(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await self.cmd_mode(update, context)
+
+    async def cmd_vocab(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Consulta directa del significado de una palabra o frase desconocida."""
+        user_id = f"tg_{update.effective_user.id}"
+        state = tracker.get_user_state(user_id)
+        lang = state["language"]
+        term = " ".join(context.args).strip() if context.args else ""
+        if not term:
+            await self._safe_reply_text(
+                update.effective_message,
+                "📖 Por favor indica la palabra que deseas consultar.\n"
+                "Ejemplo: <code>/palabra Hund</code> o <code>/palabra weather</code>",
+            )
+            return
+
+        await update.effective_message.reply_chat_action(ChatAction.TYPING)
+        explanation = gemini_coach.explain_vocabulary(term, lang)
+        clean_html = _format_markdown_for_telegram(explanation)
+        keyboard = [
+            [InlineKeyboardButton("📚 Volver a Ejercicios", callback_data="btn_exercise")],
+        ]
+        await self._safe_reply_text(
+            update.effective_message,
+            f"📖 <b>Consulta de Vocabulario:</b>\n\n{clean_html}",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+
+    async def cmd_language(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [
                 InlineKeyboardButton("🇩🇪 Alemán (de-DE)", callback_data="lang_de"),
@@ -345,9 +385,7 @@ class TelegramCoachBot:
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
 
-    async def cmd_custom_phrase(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ):
+    async def cmd_custom_phrase(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Permite al usuario fijar una frase propia para practicar."""
         user_id = f"tg_{update.effective_user.id}"
         phrase = " ".join(context.args).strip() if context.args else ""
@@ -361,16 +399,8 @@ class TelegramCoachBot:
 
         tracker.set_user_custom_phrase(user_id, phrase)
         keyboard = [
-            [
-                InlineKeyboardButton(
-                    "🔊 Escuchar Pronunciación", callback_data="tts_custom"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "📚 Volver a Ejercicios", callback_data="btn_exercise"
-                )
-            ],
+            [InlineKeyboardButton("🔊 Escuchar Pronunciación", callback_data="tts_custom")],
+            [InlineKeyboardButton("📚 Volver a Ejercicios", callback_data="btn_exercise")],
         ]
         await self._safe_reply_text(
             update.effective_message,
@@ -380,19 +410,22 @@ class TelegramCoachBot:
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
 
-    async def cmd_exercise(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ):
+    async def cmd_exercise(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = f"tg_{update.effective_user.id}"
         await self._send_exercise_card(update, user_id)
 
-    async def _send_exercise_card(
-        self, update: Update, user_id: str, edit_message: bool = False
-    ):
-        """Envía o actualiza la tarjeta del ejercicio actual con guía fonética amigable e IPA."""
+    async def _send_exercise_card(self, update: Update, user_id: str, edit_message: bool = False):
+        """Envía o actualiza la tarjeta del ejercicio según la modalidad activa (Hablar, Escribir, Comprender)."""
         state = tracker.get_user_state(user_id)
         lang = state["language"]
-        exercises = get_exercises(language=lang)
+        skill_mode = state.get("skill_mode", "speaking")
+        level = state.get("level", "A1")
+
+        exercises = get_exercises(language=lang, level=level, skill_type=skill_mode)
+        if not exercises:
+            exercises = get_exercises(language=lang, skill_type=skill_mode)
+        if not exercises:
+            exercises = get_exercises(language=lang)
 
         if not exercises:
             msg = "No hay ejercicios disponibles en este momento."
@@ -408,57 +441,133 @@ class TelegramCoachBot:
         tracker.set_user_custom_phrase(user_id, None)
 
         lang_header = "🇩🇪 ALEMÁN" if lang.startswith("de") else "🇺🇸 INGLÉS"
-        phonemes_str = " · ".join([f"<code>/{p}/</code>" for p in ex.focus_phonemes])
 
-        card_lines = [
-            f"📖 <b>{lang_header}</b> — [{ex.level}] {ex.category}",
-            f"<b>Tema:</b> {ex.title}\n",
-            f"🗣️ <b>Frase a pronunciar:</b>",
-            f'👉 <b>"{ex.target_text}"</b>\n',
-        ]
-
-        if ex.phonetic_guide:
-            card_lines.append(
-                f'🗣️ <b>Pronunciación fácil:</b> <i>"{ex.phonetic_guide}"</i>'
-            )
-        if ex.ipa:
-            card_lines.append(f"🔤 <b>Símbolos IPA:</b> <code>/{ex.ipa}/</code>")
-        if ex.phonetic_notes:
-            card_lines.append(f"ℹ️ <b>Guía de sonidos:</b> {ex.phonetic_notes}")
-
-        card_lines.extend(
-            [
-                f'🇪🇸 <b>Traducción:</b> <i>"{ex.translation_es}"</i>',
-                f"🎯 <b>Sonidos clave:</b> {phonemes_str}\n",
-                f"💡 <b>Consejo de Articulación:</b>",
-                f"<i>{ex.tip}</i>\n",
-                f"<i>(Ejercicio {idx + 1} de {len(exercises)})</i>",
-                f"👇 <b>Mantén presionado el micrófono 🎙️ para enviar tu audio</b>",
+        if skill_mode == "writing":
+            card_lines = [
+                f"✍️ <b>{lang_header} — [{ex.level}] {ex.category}</b>",
+                f"<b>Tema:</b> {ex.title}\n",
+                "📝 <b>Consigna de Escritura:</b>",
+                f"👉 <b>{ex.prompt or 'Traduce al alemán:'}</b>\n",
             ]
-        )
+            if ex.grammar_note:
+                card_lines.append(f"💡 <b>Pista Gramatical:</b> <i>{ex.grammar_note}</i>\n")
+            card_lines.extend(
+                [
+                    f"<i>(Ejercicio {idx + 1} de {len(exercises)})</i>",
+                    "👇 <b>Escribe tu respuesta directamente en este chat:</b>",
+                ]
+            )
+            keyboard = [
+                [
+                    InlineKeyboardButton("📖 Vocabulario de la Frase", callback_data="vocab_card"),
+                    InlineKeyboardButton("🔊 Escuchar Frase Modelo", callback_data=f"tts_{ex.id}"),
+                ],
+                [
+                    InlineKeyboardButton("⬅️ Anterior", callback_data="ex_prev"),
+                    InlineKeyboardButton(f"{idx + 1}/{len(exercises)}", callback_data="ex_curr"),
+                    InlineKeyboardButton("Siguiente ➡️", callback_data="ex_next"),
+                ],
+                [
+                    InlineKeyboardButton("🎯 Cambiar Modo/Nivel", callback_data="btn_mode_menu"),
+                    InlineKeyboardButton("📊 Estadísticas", callback_data="btn_stats"),
+                ],
+            ]
+
+        elif skill_mode == "listening":
+            card_lines = [
+                f"👂 <b>{lang_header} — [{ex.level}] {ex.category}</b>",
+                f"<b>Tema:</b> {ex.title}\n",
+                "🎧 <b>Pregunta de Comprensión:</b>",
+                f"👉 <b>{ex.prompt or 'Escucha el audio nativo y responde:'}</b>\n",
+            ]
+            if ex.options:
+                card_lines.append("<b>Opciones:</b>")
+                for i, opt in enumerate(ex.options):
+                    card_lines.append(f"{i + 1}️⃣ {opt}")
+                card_lines.append("")
+            card_lines.extend(
+                [
+                    f"<i>(Ejercicio {idx + 1} de {len(exercises)})</i>",
+                    "👇 <b>Toca 'Escuchar Audio' y luego pulsa la opción correcta o responde por texto:</b>",
+                ]
+            )
+
+            opt_buttons = []
+            if ex.options:
+                opt_buttons = [
+                    InlineKeyboardButton(f"{i + 1}️⃣", callback_data=f"listen_opt_{i}")
+                    for i in range(len(ex.options))
+                ]
+
+            keyboard = [
+                [
+                    InlineKeyboardButton("🔊 Escuchar Audio", callback_data=f"tts_{ex.id}"),
+                    InlineKeyboardButton("📖 Vocabulario", callback_data="vocab_card"),
+                ],
+            ]
+            if opt_buttons:
+                keyboard.append(opt_buttons)
+            keyboard.extend(
+                [
+                    [
+                        InlineKeyboardButton("⬅️ Anterior", callback_data="ex_prev"),
+                        InlineKeyboardButton(
+                            f"{idx + 1}/{len(exercises)}", callback_data="ex_curr"
+                        ),
+                        InlineKeyboardButton("Siguiente ➡️", callback_data="ex_next"),
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            "🎯 Cambiar Modo/Nivel", callback_data="btn_mode_menu"
+                        ),
+                        InlineKeyboardButton("📊 Estadísticas", callback_data="btn_stats"),
+                    ],
+                ]
+            )
+
+        else:
+            # Modo SPEAKING (Hablar)
+            phonemes_str = " · ".join([f"<code>/{p}/</code>" for p in ex.focus_phonemes])
+            card_lines = [
+                f"🗣️ <b>{lang_header} — [{ex.level}] {ex.category}</b>",
+                f"<b>Tema:</b> {ex.title}\n",
+                "🗣️ <b>Frase a pronunciar:</b>",
+                f'👉 <b>"{ex.target_text}"</b>\n',
+            ]
+            if ex.phonetic_guide:
+                card_lines.append(f'🗣️ <b>Pronunciación fácil:</b> <i>"{ex.phonetic_guide}"</i>')
+            if ex.ipa:
+                card_lines.append(f"🔤 <b>Símbolos IPA:</b> <code>/{ex.ipa}/</code>")
+            if ex.phonetic_notes:
+                card_lines.append(f"ℹ️ <b>Guía de sonidos:</b> {ex.phonetic_notes}")
+
+            card_lines.extend(
+                [
+                    f'🇪🇸 <b>Traducción:</b> <i>"{ex.translation_es}"</i>',
+                    f"🎯 <b>Sonidos clave:</b> {phonemes_str}\n",
+                    "💡 <b>Consejo de Articulación:</b>",
+                    f"<i>{ex.tip}</i>\n",
+                    f"<i>(Ejercicio {idx + 1} de {len(exercises)})</i>",
+                    "👇 <b>Mantén presionado el micrófono 🎙️ para enviar tu audio</b>",
+                ]
+            )
+            keyboard = [
+                [
+                    InlineKeyboardButton("🔊 Escuchar Referencia", callback_data=f"tts_{ex.id}"),
+                    InlineKeyboardButton("📖 Vocabulario", callback_data="vocab_card"),
+                ],
+                [
+                    InlineKeyboardButton("⬅️ Anterior", callback_data="ex_prev"),
+                    InlineKeyboardButton(f"{idx + 1}/{len(exercises)}", callback_data="ex_curr"),
+                    InlineKeyboardButton("Siguiente ➡️", callback_data="ex_next"),
+                ],
+                [
+                    InlineKeyboardButton("🎯 Cambiar Modo/Nivel", callback_data="btn_mode_menu"),
+                    InlineKeyboardButton("📊 Estadísticas", callback_data="btn_stats"),
+                ],
+            ]
 
         card_text = "\n".join(card_lines)
-
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    "🔊 Escuchar Referencia", callback_data=f"tts_{ex.id}"
-                ),
-            ],
-            [
-                InlineKeyboardButton("⬅️ Anterior", callback_data="ex_prev"),
-                InlineKeyboardButton(
-                    f"{idx + 1}/{len(exercises)}", callback_data="ex_curr"
-                ),
-                InlineKeyboardButton("Siguiente ➡️", callback_data="ex_next"),
-            ],
-            [
-                InlineKeyboardButton(
-                    "🌐 Cambiar Idioma", callback_data="btn_lang_menu"
-                ),
-                InlineKeyboardButton("📊 Estadísticas", callback_data="btn_stats"),
-            ],
-        ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         if edit_message and update.callback_query:
@@ -475,15 +584,11 @@ class TelegramCoachBot:
                 update.effective_chat, card_text, reply_markup=reply_markup
             )
 
-    async def cmd_stats(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ):
+    async def cmd_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = f"tg_{update.effective_user.id}"
         await self._send_stats(update, user_id)
 
-    async def _send_stats(
-        self, update: Update, user_id: str, edit_message: bool = False
-    ):
+    async def _send_stats(self, update: Update, user_id: str, edit_message: bool = False):
         stats = tracker.get_user_stats(user_id)
         if stats["total_attempts"] == 0:
             text = (
@@ -513,24 +618,14 @@ class TelegramCoachBot:
             )
 
         keyboard = [
-            [
-                InlineKeyboardButton(
-                    "📚 Ir a Ejercicios", callback_data="btn_exercise"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "🏠 Menú Principal", callback_data="btn_start_menu"
-                )
-            ],
+            [InlineKeyboardButton("📚 Ir a Ejercicios", callback_data="btn_exercise")],
+            [InlineKeyboardButton("🏠 Menú Principal", callback_data="btn_start_menu")],
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         if edit_message and update.callback_query:
             try:
-                await self._safe_edit_text(
-                    update.callback_query, text, reply_markup=reply_markup
-                )
+                await self._safe_edit_text(update.callback_query, text, reply_markup=reply_markup)
             except Exception:
                 await self._safe_send_chat_message(
                     update.effective_chat, text, reply_markup=reply_markup
@@ -540,12 +635,8 @@ class TelegramCoachBot:
                 update.effective_chat, text, reply_markup=reply_markup
             )
 
-    async def cmd_web(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ):
-        url = (
-            settings.WEB_BASE_URL or f"http://{settings.HOST}:{settings.PORT}"
-        )
+    async def cmd_web(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        url = settings.WEB_BASE_URL or f"http://{settings.HOST}:{settings.PORT}"
         text = (
             f"🖥️ <b>Panel Web interactivo de tut_bot:</b>\n"
             f"<code>{url}</code>\n\n"
@@ -553,9 +644,7 @@ class TelegramCoachBot:
         )
         await self._safe_reply_text(update.effective_message, text)
 
-    async def handle_callback(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ):
+    async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
         await query.answer()
         data = query.data
@@ -573,18 +662,132 @@ class TelegramCoachBot:
         elif data == "btn_lang_menu":
             keyboard = [
                 [
-                    InlineKeyboardButton(
-                        "🇩🇪 Alemán (de-DE)", callback_data="lang_de"
-                    ),
-                    InlineKeyboardButton(
-                        "🇺🇸 Inglés (en-US)", callback_data="lang_en"
-                    ),
+                    InlineKeyboardButton("🇩🇪 Alemán (de-DE)", callback_data="lang_de"),
+                    InlineKeyboardButton("🇺🇸 Inglés (en-US)", callback_data="lang_en"),
                 ],
                 [InlineKeyboardButton("⬅️ Volver", callback_data="btn_exercise")],
             ]
             await self._safe_edit_text(
                 query,
                 "🌍 <b>Selecciona el idioma para practicar:</b>",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+            )
+
+        elif data == "btn_mode_menu":
+            await self.cmd_mode(update, context)
+
+        elif data.startswith("mode_"):
+            new_mode = data.replace("mode_", "")
+            tracker.set_user_skill_mode(user_id, new_mode)
+            skill_names = {
+                "speaking": "🗣️ Hablar (Pronunciación)",
+                "writing": "✍️ Escribir (Gramática y Traducción)",
+                "listening": "👂 Comprender (Audición y Vocabulario)",
+            }
+            await self._safe_edit_text(
+                query,
+                f"✅ Modo de entrenamiento cambiado a: <b>{skill_names.get(new_mode, new_mode)}</b>.",
+            )
+            await self._send_exercise_card(update, user_id, edit_message=False)
+
+        elif data.startswith("level_"):
+            new_level = data.replace("level_", "")
+            tracker.set_user_level(user_id, new_level)
+            await self._safe_edit_text(
+                query, f"✅ Nivel de dificultad cambiado a: <b>{new_level}</b>."
+            )
+            await self._send_exercise_card(update, user_id, edit_message=False)
+
+        elif data == "vocab_card":
+            state = tracker.get_user_state(user_id)
+            exercises = get_exercises(
+                language=state["language"],
+                level=state.get("level", "A1"),
+                skill_type=state.get("skill_mode", "speaking"),
+            )
+            if not exercises:
+                exercises = get_exercises(language=state["language"])
+            idx = state["exercise_index"] % len(exercises)
+            ex = exercises[idx]
+
+            if ex.vocabulary_breakdown:
+                lines = [
+                    f"📖 <b>Vocabulario de la frase [{ex.level}]:</b>\n",
+                    f'👉 <i>"{ex.target_text}"</i>\n',
+                ]
+                for w, mean in ex.vocabulary_breakdown.items():
+                    lines.append(f"• <b>{w}</b>: {mean}")
+                if ex.grammar_note:
+                    lines.append(f"\n💡 <b>Gramática:</b> <i>{ex.grammar_note}</i>")
+                vocab_msg = "\n".join(lines)
+            else:
+                raw_exp = gemini_coach.explain_vocabulary(ex.target_text, state["language"])
+                vocab_msg = _format_markdown_for_telegram(raw_exp)
+
+            keyboard = [
+                [InlineKeyboardButton("⬅️ Volver al Ejercicio", callback_data="btn_exercise")],
+            ]
+            await self._safe_send_chat_message(
+                update.effective_chat,
+                vocab_msg,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+            )
+
+        elif data.startswith("listen_opt_"):
+            chosen_idx = int(data.replace("listen_opt_", ""))
+            state = tracker.get_user_state(user_id)
+            exercises = get_exercises(
+                language=state["language"],
+                level=state.get("level", "A1"),
+                skill_type="listening",
+            )
+            if not exercises:
+                exercises = get_exercises(language=state["language"])
+            idx = state["exercise_index"] % len(exercises)
+            ex = exercises[idx]
+
+            is_correct = chosen_idx == ex.correct_option_index
+            chosen_str = (
+                ex.options[chosen_idx] if ex.options and chosen_idx < len(ex.options) else ""
+            )
+            correct_str = (
+                ex.options[ex.correct_option_index]
+                if ex.options
+                and ex.correct_option_index is not None
+                and ex.correct_option_index < len(ex.options)
+                else ex.translation_es
+            )
+
+            if is_correct:
+                res_msg = (
+                    f"🟢 <b>¡Correcto!</b> 🎉\n\n"
+                    f'Seleccionaste: <i>"{chosen_str}"</i>\n'
+                    f"¡Has comprendido el audio perfectamente!\n\n"
+                    f'📖 <b>Transcripción:</b> <i>"{ex.target_text}"</i>\n'
+                    f'🇪🇸 <b>Significado:</b> <i>"{ex.translation_es}"</i>'
+                )
+            else:
+                res_msg = (
+                    f"🔴 <b>Casi</b> 👍\n\n"
+                    f'Elegiste: <i>"{chosen_str}"</i>\n'
+                    f'La respuesta correcta era: <b>"{correct_str}"</b>\n\n'
+                    f'📖 <b>Transcripción:</b> <i>"{ex.target_text}"</i>\n'
+                    f'🇪🇸 <b>Significado:</b> <i>"{ex.translation_es}"</i>'
+                )
+
+            keyboard = [
+                [
+                    InlineKeyboardButton("➡️ Siguiente Ejercicio", callback_data="ex_next"),
+                    InlineKeyboardButton("🔄 Reintentar", callback_data="btn_exercise"),
+                ],
+                [
+                    InlineKeyboardButton("🔊 Volver a Escuchar", callback_data=f"tts_{ex.id}"),
+                    InlineKeyboardButton("📖 Vocabulario", callback_data="vocab_card"),
+                ],
+            ]
+            await self._safe_send_chat_message(
+                update.effective_chat,
+                res_msg,
                 reply_markup=InlineKeyboardMarkup(keyboard),
             )
 
@@ -597,17 +800,27 @@ class TelegramCoachBot:
 
         elif data == "ex_next":
             state = tracker.get_user_state(user_id)
-            exercises = get_exercises(language=state["language"])
+            exercises = get_exercises(
+                language=state["language"],
+                level=state.get("level", "A1"),
+                skill_type=state.get("skill_mode", "speaking"),
+            )
+            if not exercises:
+                exercises = get_exercises(language=state["language"])
             next_idx = (state["exercise_index"] + 1) % len(exercises)
             tracker.set_user_exercise_index(user_id, next_idx)
             await self._send_exercise_card(update, user_id, edit_message=True)
 
         elif data == "ex_prev":
             state = tracker.get_user_state(user_id)
-            exercises = get_exercises(language=state["language"])
-            prev_idx = (state["exercise_index"] - 1 + len(exercises)) % len(
-                exercises
+            exercises = get_exercises(
+                language=state["language"],
+                level=state.get("level", "A1"),
+                skill_type=state.get("skill_mode", "speaking"),
             )
+            if not exercises:
+                exercises = get_exercises(language=state["language"])
+            prev_idx = (state["exercise_index"] - 1 + len(exercises)) % len(exercises)
             tracker.set_user_exercise_index(user_id, prev_idx)
             await self._send_exercise_card(update, user_id, edit_message=True)
 
@@ -615,10 +828,7 @@ class TelegramCoachBot:
             await self._send_tts_reference(query, user_id, data)
 
         elif data == "btn_web":
-            url = (
-                settings.WEB_BASE_URL
-                or f"http://{settings.HOST}:{settings.PORT}"
-            )
+            url = settings.WEB_BASE_URL or f"http://{settings.HOST}:{settings.PORT}"
             await self._safe_edit_text(
                 query,
                 f"🖥️ <b>Panel Web de tut_bot:</b>\n<code>{url}</code>\n\nUsa /ejercicio para volver al entrenamiento.",
@@ -632,22 +842,24 @@ class TelegramCoachBot:
         if data == "tts_custom" and state.get("custom_phrase"):
             text = state["custom_phrase"]
         else:
-            exercises = get_exercises(language=lang)
+            exercises = get_exercises(
+                language=lang,
+                level=state.get("level", "A1"),
+                skill_type=state.get("skill_mode", "speaking"),
+            )
+            if not exercises:
+                exercises = get_exercises(language=lang)
             idx = state["exercise_index"] % len(exercises)
             text = exercises[idx].target_text
 
         wav_bytes = azure_service.text_to_speech(text=text, language=lang)
         if not wav_bytes:
-            await query.message.reply_text(
-                "⚠️ No se pudo generar el audio nativo de referencia."
-            )
+            await query.message.reply_text("⚠️ No se pudo generar el audio nativo de referencia.")
             return
 
         ogg_bytes = audio_converter.wav_to_ogg_opus(wav_bytes)
         audio_stream = io.BytesIO(ogg_bytes if ogg_bytes else wav_bytes)
-        audio_stream.name = (
-            "referencia_nativa.ogg" if ogg_bytes else "referencia_nativa.wav"
-        )
+        audio_stream.name = "referencia_nativa.ogg" if ogg_bytes else "referencia_nativa.wav"
 
         caption_flag = "🇩🇪" if lang.startswith("de") else "🇺🇸"
         await query.message.reply_voice(
@@ -656,25 +868,176 @@ class TelegramCoachBot:
             parse_mode=ParseMode.HTML,
         )
 
-    async def handle_text(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ):
-        """Si el usuario escribe un texto directamente, lo establece como frase de práctica."""
-        text = (update.effective_message.text or "").strip()
+    async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Maneja las respuestas de texto, preguntas de vocabulario y respuestas de escritura/comprensión."""
         user_id = f"tg_{update.effective_user.id}"
-        tracker.set_user_custom_phrase(user_id, text)
+        state = tracker.get_user_state(user_id)
+        lang = state["language"]
+        skill_mode = state.get("skill_mode", "speaking")
+        level = state.get("level", "A1")
+        text = (update.effective_message.text or "").strip()
 
+        # 1. Consulta directa de vocabulario o palabra desconocida
+        lower_text = text.lower()
+        if (
+            lower_text.startswith("/palabra")
+            or lower_text.startswith("¿que significa")
+            or lower_text.startswith("que significa")
+            or lower_text.startswith("¿qué significa")
+            or lower_text.startswith("qué significa")
+            or lower_text.startswith("definir")
+        ):
+            for prefix in [
+                "/palabra",
+                "¿qué significa",
+                "qué significa",
+                "¿que significa",
+                "que significa",
+                "definir",
+            ]:
+                if lower_text.startswith(prefix):
+                    clean_term = text[len(prefix) :].strip(" ?:.,\"'")
+                    break
+            else:
+                clean_term = text
+
+            if not clean_term:
+                await self._safe_reply_text(
+                    update.effective_message,
+                    "📖 Indica la palabra que deseas consultar. Ejemplo: <code>/palabra Hund</code> o <code>¿Qué significa 'Buch'?</code>",
+                )
+                return
+
+            await update.effective_message.reply_chat_action(ChatAction.TYPING)
+            explanation = gemini_coach.explain_vocabulary(clean_term, lang)
+            clean_html = _format_markdown_for_telegram(explanation)
+            keyboard = [
+                [InlineKeyboardButton("📚 Volver a Ejercicios", callback_data="btn_exercise")],
+            ]
+            await self._safe_reply_text(
+                update.effective_message,
+                f"📖 <b>Consulta de Vocabulario:</b>\n\n{clean_html}",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+            )
+            return
+
+        # 2. Modo ESCRITURA: Evaluar la respuesta del alumno
+        if skill_mode == "writing":
+            exercises = get_exercises(language=lang, level=level, skill_type="writing")
+            if not exercises:
+                exercises = get_exercises(language=lang, skill_type="writing")
+            if not exercises:
+                exercises = get_exercises(language=lang)
+
+            idx = state["exercise_index"] % len(exercises)
+            ex = exercises[idx]
+
+            await update.effective_message.reply_chat_action(ChatAction.TYPING)
+            eval_res = gemini_coach.evaluate_writing(
+                user_input=text,
+                target_text=ex.target_text,
+                prompt=ex.prompt or ex.title,
+                language=lang,
+                level=ex.level,
+            )
+
+            badge = (
+                "🟢 <b>¡Excelente trabajo!</b> 🎉"
+                if eval_res.is_correct
+                else "🟡 <b>Buen intento</b> 💪"
+            )
+            corrections_str = ""
+            if eval_res.corrections:
+                corrections_str = (
+                    "\n🔍 <b>Correcciones:</b>\n"
+                    + "\n".join([f"• {c}" for c in eval_res.corrections])
+                    + "\n"
+                )
+
+            grammar_str = (
+                f"\n💡 <b>Regla:</b> <i>{eval_res.grammar_notes}</i>\n"
+                if eval_res.grammar_notes
+                else ""
+            )
+            clean_feedback = _format_markdown_for_telegram(eval_res.pedagogical_feedback)
+
+            report = (
+                f"{badge}\n\n"
+                f'📝 <b>Tu respuesta:</b> <i>"{text}"</i>\n'
+                f'🎯 <b>Frase modelo:</b> <b>"{ex.target_text}"</b>\n'
+                f"📊 <b>Puntaje:</b> <code>{eval_res.score:.0f}/100</code>\n"
+                f"{corrections_str}"
+                f"{grammar_str}\n"
+                f"👨‍🏫 <b>Consejo del Tutor:</b>\n{clean_feedback}"
+            )
+
+            keyboard = [
+                [
+                    InlineKeyboardButton("➡️ Siguiente Ejercicio", callback_data="ex_next"),
+                    InlineKeyboardButton("🔄 Reintentar", callback_data="btn_exercise"),
+                ],
+                [
+                    InlineKeyboardButton("📖 Ver Vocabulario", callback_data="vocab_card"),
+                    InlineKeyboardButton("🔊 Escuchar Modelo", callback_data=f"tts_{ex.id}"),
+                ],
+                [
+                    InlineKeyboardButton("🎯 Cambiar Modo/Nivel", callback_data="btn_mode_menu"),
+                ],
+            ]
+
+            await self._safe_reply_text(
+                update.effective_message,
+                report,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+            )
+            return
+
+        # 3. Modo COMPRENSIÓN (Listening): Evaluar lo que respondió por texto
+        if skill_mode == "listening":
+            exercises = get_exercises(language=lang, level=level, skill_type="listening")
+            if not exercises:
+                exercises = get_exercises(language=lang)
+            idx = state["exercise_index"] % len(exercises)
+            ex = exercises[idx]
+
+            await update.effective_message.reply_chat_action(ChatAction.TYPING)
+            comp_res = gemini_coach.evaluate_comprehension(
+                user_answer=text,
+                audio_transcript=ex.target_text,
+                question=ex.prompt or ex.title,
+                target_answer=ex.translation_es,
+                language=lang,
+            )
+
+            badge = (
+                "🟢 <b>¡Correcto!</b> 🎉" if comp_res.get("is_correct") else "🟡 <b>Atención</b> 🎧"
+            )
+            keyboard = [
+                [
+                    InlineKeyboardButton("➡️ Siguiente", callback_data="ex_next"),
+                    InlineKeyboardButton("🔄 Reintentar", callback_data="btn_exercise"),
+                ],
+                [
+                    InlineKeyboardButton("🔊 Volver a Escuchar", callback_data=f"tts_{ex.id}"),
+                    InlineKeyboardButton("📖 Vocabulario", callback_data="vocab_card"),
+                ],
+            ]
+            await self._safe_reply_text(
+                update.effective_message,
+                f"{badge}\n\n"
+                f'📝 <b>Tu respuesta:</b> "{text}"\n'
+                f"💡 <b>Explicación:</b> {comp_res.get('feedback', '')}\n\n"
+                f'📖 <b>Transcripción:</b> <i>"{ex.target_text}"</i>\n'
+                f'🇪🇸 <b>Significado:</b> <i>"{ex.translation_es}"</i>',
+                reply_markup=InlineKeyboardMarkup(keyboard),
+            )
+            return
+
+        # 4. Modo HABLAR: Si escribe texto, fijarlo como frase personalizada para pronunciar
+        tracker.set_user_custom_phrase(user_id, text)
         keyboard = [
-            [
-                InlineKeyboardButton(
-                    "🔊 Escuchar Referencia", callback_data="tts_custom"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "📚 Volver a Ejercicios", callback_data="btn_exercise"
-                )
-            ],
+            [InlineKeyboardButton("🔊 Escuchar Referencia", callback_data="tts_custom")],
+            [InlineKeyboardButton("📚 Volver a Ejercicios", callback_data="btn_exercise")],
         ]
         await self._safe_reply_text(
             update.effective_message,
@@ -684,9 +1047,7 @@ class TelegramCoachBot:
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
 
-    async def handle_voice(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ):
+    async def handle_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Procesa la nota de voz enviada por el usuario."""
         user_id = f"tg_{update.effective_user.id}"
         state = tracker.get_user_state(user_id)
@@ -696,7 +1057,13 @@ class TelegramCoachBot:
             reference_text = state["custom_phrase"]
             is_custom = True
         else:
-            exercises = get_exercises(language=lang)
+            exercises = get_exercises(
+                language=lang,
+                level=state.get("level", "A1"),
+                skill_type=state.get("skill_mode", "speaking"),
+            )
+            if not exercises:
+                exercises = get_exercises(language=lang)
             idx = state["exercise_index"] % len(exercises)
             reference_text = exercises[idx].target_text
             is_custom = False
@@ -773,9 +1140,7 @@ class TelegramCoachBot:
 
             acc_bar = _make_progress_bar(eval_result.accuracy_score)
             flu_bar = _make_progress_bar(eval_result.fluency_score)
-            pro_bar = _make_progress_bar(
-                eval_result.prosody_score or eval_result.accuracy_score
-            )
+            pro_bar = _make_progress_bar(eval_result.prosody_score or eval_result.accuracy_score)
 
             # Desglose de palabras con IPA
             word_lines = []
@@ -783,9 +1148,7 @@ class TelegramCoachBot:
                 icon = "✅" if w.score >= 75 else "⚠️"
                 phoneme_details = " ".join(
                     [
-                        f"{p.phoneme}({p.score:.0f})"
-                        if p.score < 70
-                        else p.phoneme
+                        f"{p.phoneme}({p.score:.0f})" if p.score < 70 else p.phoneme
                         for p in w.phonemes
                     ]
                 )
@@ -805,9 +1168,7 @@ class TelegramCoachBot:
             clarif_section = ""
             if clarifications:
                 clarif_section = (
-                    f"\n📖 <b>Guía de símbolos detectados:</b>\n"
-                    + "\n".join(clarifications)
-                    + "\n"
+                    "\n📖 <b>Guía de símbolos detectados:</b>\n" + "\n".join(clarifications) + "\n"
                 )
 
             # Limpiar y sanitizar texto de Gemini para HTML
@@ -830,21 +1191,13 @@ class TelegramCoachBot:
                 [
                     InlineKeyboardButton(
                         "🔊 Escuchar Referencia",
-                        callback_data="tts_custom"
-                        if is_custom
-                        else "tts_curated",
+                        callback_data="tts_custom" if is_custom else "tts_curated",
                     ),
-                    InlineKeyboardButton(
-                        "🔄 Repetir Frase", callback_data="btn_exercise"
-                    ),
+                    InlineKeyboardButton("🔄 Repetir Frase", callback_data="btn_exercise"),
                 ],
                 [
-                    InlineKeyboardButton(
-                        "➡️ Siguiente Ejercicio", callback_data="ex_next"
-                    ),
-                    InlineKeyboardButton(
-                        "📊 Estadísticas", callback_data="btn_stats"
-                    ),
+                    InlineKeyboardButton("➡️ Siguiente Ejercicio", callback_data="ex_next"),
+                    InlineKeyboardButton("📊 Estadísticas", callback_data="btn_stats"),
                 ],
             ]
 
@@ -855,9 +1208,7 @@ class TelegramCoachBot:
             )
 
         except Exception as e:
-            logger.error(
-                f"Error procesando nota de voz de Telegram: {e}", exc_info=True
-            )
+            logger.error(f"Error procesando nota de voz de Telegram: {e}", exc_info=True)
             await self._safe_edit_text(
                 status_msg,
                 f"⚠️ Ocurrió un inconveniente evaluando tu audio: {str(e)}\n"
@@ -873,9 +1224,7 @@ class TelegramCoachBot:
     async def start_polling(self):
         """Inicia el bot en modo polling asíncrono."""
         if not self.is_configured():
-            logger.warning(
-                "TelegramCoachBot: TELEGRAM_BOT_TOKEN no configurado. Bot no iniciado."
-            )
+            logger.warning("TelegramCoachBot: TELEGRAM_BOT_TOKEN no configurado. Bot no iniciado.")
             return
 
         self.build_app()
