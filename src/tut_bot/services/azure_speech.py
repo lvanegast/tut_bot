@@ -29,12 +29,18 @@ class AzureSpeechService:
         return HAS_AZURE_SDK and settings.is_azure_ready
 
     def evaluate_pronunciation(
-        self, wav_path: str, reference_text: str, language: str = "de-DE"
+        self,
+        wav_path: Optional[str] = None,
+        reference_text: str = "",
+        language: str = "de-DE",
+        audio_wav_path: Optional[str] = None,
+        **kwargs,
     ) -> EvaluationResponse:
         """
         Evalúa el archivo WAV contra el texto de referencia usando Azure Speech SDK.
         Si no hay credenciales o está en modo mock, recurre a una simulación fonética realista.
         """
+        target_wav = wav_path or audio_wav_path or kwargs.get("audio_wav_path", "")
         if not self.is_available() or settings.is_mock_mode:
             return self._mock_evaluation(reference_text, language)
 
@@ -52,7 +58,7 @@ class AzureSpeechService:
             pron_config.phoneme_alphabet = "IPA"
             pron_config.enable_prosody_assessment = True
 
-            audio_config = speechsdk.audio.AudioConfig(filename=wav_path)
+            audio_config = speechsdk.audio.AudioConfig(filename=target_wav)
             recognizer = speechsdk.SpeechRecognizer(
                 speech_config=speech_config,
                 language=language,
@@ -98,6 +104,8 @@ class AzureSpeechService:
             resp.pedagogical_feedback = f"(Error con Azure SDK: {e}. Mostrando simulación)."
             return resp
 
+    assess_pronunciation = evaluate_pronunciation
+
     def synthesize_speech(self, text: str, language: str = "de-DE") -> Optional[bytes]:
         """Sintetiza audio nativo con Azure TTS para escuchar la pronunciación de referencia."""
         if not self.is_available():
@@ -124,6 +132,8 @@ class AzureSpeechService:
         except Exception as e:
             logger.error(f"Error en síntesis TTS: {e}")
             return None
+
+    text_to_speech = synthesize_speech
 
     def _parse_azure_json(self, json_str: str, reference_text: str) -> EvaluationResponse:
         """Parsea la respuesta JSON estructurada de Azure Pronunciation Assessment."""

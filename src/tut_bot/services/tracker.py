@@ -200,6 +200,7 @@ class ProgressTracker:
                 "average_accuracy": 0.0,
                 "average_fluency": 0.0,
                 "weak_phonemes_top": [],
+                "weak_phonemes": [],
                 "recent_history": [],
             }
 
@@ -237,6 +238,7 @@ class ProgressTracker:
             "average_accuracy": avg_accuracy,
             "average_fluency": avg_fluency,
             "weak_phonemes_top": weak_phonemes_top,
+            "weak_phonemes": [p for p, _ in phoneme_counter.most_common(5)],
             "recent_history": recent,
         }
 

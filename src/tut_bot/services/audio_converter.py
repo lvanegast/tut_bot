@@ -6,6 +6,8 @@ from typing import Optional
 
 import imageio_ffmpeg
 
+import shutil
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,14 +19,20 @@ class AudioConverter:
     """
 
     def __init__(self):
-        try:
-            self._ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-            logger.info(f"FFmpeg detectado correctamente: {self._ffmpeg_exe}")
-        except Exception as e:
-            self._ffmpeg_exe = "ffmpeg"
-            logger.warning(
-                f"No se pudo resolver ffmpeg mediante imageio_ffmpeg: {e}. Usando 'ffmpeg' del sistema."
-            )
+        # En Linux/Docker (Jetson Nano), preferir el binario nativo del sistema (/usr/bin/ffmpeg)
+        sys_ffmpeg = shutil.which("ffmpeg")
+        if sys_ffmpeg:
+            self._ffmpeg_exe = sys_ffmpeg
+            logger.info(f"FFmpeg del sistema detectado: {self._ffmpeg_exe}")
+        else:
+            try:
+                self._ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+                logger.info(f"FFmpeg detectado mediante imageio_ffmpeg: {self._ffmpeg_exe}")
+            except Exception as e:
+                self._ffmpeg_exe = "ffmpeg"
+                logger.warning(
+                    f"No se pudo resolver ffmpeg mediante imageio_ffmpeg: {e}. Usando 'ffmpeg' por defecto."
+                )
 
     @property
     def ffmpeg_bin(self) -> str:

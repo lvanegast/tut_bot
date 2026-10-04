@@ -158,6 +158,29 @@ function renderExercise() {
     document.getElementById('exercise-category').textContent = ex.category;
     document.getElementById('target-sentence').textContent = ex.target_text;
     document.getElementById('target-ipa').textContent = ex.ipa ? `/${ex.ipa}/` : '';
+
+    // Pronunciación figurada fácil en español
+    const guideElem = document.getElementById('target-guide');
+    if (guideElem) {
+        if (ex.phonetic_guide) {
+            guideElem.textContent = `🗣️ Suena como: "${ex.phonetic_guide}"`;
+            guideElem.classList.remove('hidden');
+        } else {
+            guideElem.classList.add('hidden');
+        }
+    }
+
+    // Notas de equivalencias de símbolos IPA
+    const notesElem = document.getElementById('target-notes');
+    if (notesElem) {
+        if (ex.phonetic_notes) {
+            notesElem.textContent = `💡 Equivalencias: ${ex.phonetic_notes}`;
+            notesElem.classList.remove('hidden');
+        } else {
+            notesElem.classList.add('hidden');
+        }
+    }
+
     document.getElementById('target-translation').textContent = `"${ex.translation_es}"`;
     document.getElementById('exercise-tip').textContent = ex.tip;
     document.getElementById('exercise-counter').textContent = `Ejercicio ${currentIndex + 1} de ${exercises.length}`;
@@ -417,6 +440,30 @@ function renderResults(data) {
     resultsCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+const PHONEME_TIPS = {
+    'ç': 'ch suave palatal (siseo suave, lengua en medio paladar)',
+    'x': 'ch velar (jota suave española tras a, o, u)',
+    'ʃ': 'sonido sh (como mandar a callar)',
+    'ʁ': 'r uvular (vibración suave en campanilla)',
+    'ɐ': 'r vocalizada final (suena como a corta y relajada)',
+    'øː': 'ö larga (labios en o diciendo e)',
+    'œ': 'ö corta redondeada',
+    'yː': 'ü larga (labios en beso u diciendo i)',
+    'ʏ': 'ü corta relajada',
+    'ɛː': 'ä (e abierta, baja un poco la mandíbula)',
+    'ts': 'sonido ts (como pizza)',
+    'z': 's sonora (zumbido de abeja)',
+    's': 's sorda normal',
+    'θ': 'th sorda (como z española en zapato)',
+    'ð': 'th sonora (como d suave entre dientes)',
+    'iː': 'i larga y tensa (sonriendo)',
+    'ɪ': 'i corta y relajada',
+    'æ': 'a abierta amplia (entre a y e)',
+    'ʌ': 'u corta relajada (como en cup)',
+    'w': 'w inglesa redondeada sin tocar dientes',
+    'v': 'v labiodental (dientes en labio inferior con vibración)'
+};
+
 // Mostrar fonemas IPA de la palabra seleccionada
 function showPhonemesForWord(wordObj) {
     const box = document.getElementById('phonemes-detail-box');
@@ -438,9 +485,13 @@ function showPhonemesForWord(wordObj) {
         if (p.score < 60) colorClass = "bg-rose-100 text-rose-800 border-rose-300";
         else if (p.score < 80) colorClass = "bg-amber-100 text-amber-800 border-amber-300";
 
-        pill.className = `flex flex-col items-center px-2.5 py-1 rounded-lg border text-xs font-mono font-bold ${colorClass}`;
+        const cleanPhoneme = p.phoneme.replace(/[\/\[\]]/g, '').trim();
+        const explanation = PHONEME_TIPS[cleanPhoneme] || '';
+
+        pill.className = `flex flex-col items-center px-2.5 py-1 rounded-lg border text-xs font-mono font-bold cursor-help ${colorClass}`;
+        pill.title = explanation ? `/${p.phoneme}/: ${explanation}` : `Fonema /${p.phoneme}/`;
         pill.innerHTML = `
-            <span class="text-sm">/${p.phoneme}/</span>
+            <span class="text-sm font-bold">/${p.phoneme}/</span>
             <span class="text-[9px] opacity-75">${Math.round(p.score)}</span>
         `;
         container.appendChild(pill);

@@ -1,5 +1,11 @@
 /* Estilos personalizados para tut_bot */
 
+/* Soporte tipográfico universal para el Alfabeto Fonético Internacional (IPA) */
+.ipa-font, [data-ipa], .phoneme-pill, #target-ipa, #focus-phonemes-container span, #phonemes-container span {
+    font-family: "Segoe UI", "Lucida Sans Unicode", "Arial Unicode MS", "DejaVu Sans", "Charis SIL", system-ui, sans-serif !important;
+    letter-spacing: 0.02em;
+}
+
 .recording-pulse {
     animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
 }

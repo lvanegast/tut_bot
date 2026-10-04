@@ -28,13 +28,16 @@ WORKDIR /app
 # Copiar archivos de configuración del proyecto
 COPY pyproject.toml .
 COPY uv.lock* ./
+COPY README.md ./
 
-# Sincronizar dependencias usando uv
-RUN uv sync --frozen --no-dev || uv sync --no-dev
+# Sincronizar dependencias usando uv (caching de capas sin fallar por README/src)
+RUN uv sync --frozen --no-dev --no-install-project || uv sync --no-dev --no-install-project
 
 # Copiar código fuente
 COPY src/ /app/src/
-COPY README.md /app/README.md
+
+# Instalar el paquete completo tut_bot
+RUN uv sync --frozen --no-dev || uv sync --no-dev
 
 EXPOSE 8000
 

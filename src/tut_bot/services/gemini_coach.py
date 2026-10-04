@@ -65,9 +65,8 @@ class GeminiCoachService:
         # Si todo fue excelente (score > 88)
         if overall_score >= 88 and not problem_words:
             return (
-                f"🎉 **¡Excelente pronunciación!** Tu puntuación global fue de **{overall_score:.0f}/100**.\n\n"
-                f"Has articulado con gran claridad el ritmo y los fonemas de esta frase en {lang_name}. "
-                f"Sigue practicando para consolidar tu fluidez y automatismo natural."
+                f"🎉 **¡Excelente pronunciación!** ({overall_score:.0f}/100).\n"
+                f"Has articulado con gran precisión los sonidos en {lang_name}. ¡Mantén ese ritmo!"
             )
 
         if not self.is_available() or settings.is_mock_mode:
@@ -75,27 +74,45 @@ class GeminiCoachService:
                 reference_text, language, overall_score, problem_words
             )
 
+        # Prompt ultra-conciso para minimizar tokens y latencia
         prompt = (
-            f"Eres un entrenador fonético experto y pedagógico para hispanohablantes aprendiendo {lang_name}.\n"
-            f'El usuario practicó la siguiente frase: "{reference_text}"\n'
-            f"Puntuación global obtenida: {overall_score:.1f}/100.\n"
-            f"Palabras con dificultad detectadas por el motor acústico: {[w.word + f' ({w.score:.0f} pts)' for w in problem_words]}\n"
-            f"Fonemas específicos con baja puntuación: {problem_phonemes[:5]}\n\n"
-            f"Por favor proporciona un feedback conciso y pedagógico en español con el siguiente formato:\n"
-            f"1. **Diagnóstico del sonido clave**: Cuál fue el fonema más problemático y qué sonido emitió probablemente (error común en hispanohablantes).\n"
-            f"2. **Instrucciones Anatómicas precisas**: Dónde colocar exactamente la punta y el dorso de la lengua, forma de los labios (redondos/sonrientes) y control del aire.\n"
-            f"3. **Truco Nemotécnico / Drill**: Una metáfora útil o una mini-frase de repetición inmediata.\n\n"
-            f"Mantén la respuesta empática, directa, motivadora y de no más de 3 párrafos breves."
+            f"Eres un entrenador fonético ultra-conciso para hispanohablantes aprendiendo {lang_name}.\n"
+            f"Frase: '{reference_text}' (Puntaje global: {overall_score:.0f}/100).\n"
+            f"Dificultades: {[w.word for w in problem_words[:2]]} | Fonemas: {problem_phonemes[:2]}\n\n"
+            f"Responde en MÁXIMO 2 viñetas breves (menos de 45 palabras en total):\n"
+            f"• 👄 **Articulación**: Dónde colocar lengua/labios para el sonido más errado en 1 sola frase directa.\n"
+            f"• 🎯 **Truco**: Metáfora o mini-drill inmediato.\n"
+            f"Sé directo, sin saludos ni introducciones."
         )
 
         try:
             if HAS_NEW_GENAI and self.client:
-                # Usar modelo flash rápido y de alta calidad pedagógica
-                response = self.client.models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents=prompt,
+                # Usar modelo flash-lite rápido y económico para ahorrar tokens
+                config = None
+                try:
+                    from google.genai import types
+
+                    config = types.GenerateContentConfig(
+                        max_output_tokens=120,
+                        temperature=0.2,
+                    )
+                except Exception:
+                    pass
+
+                for candidate_model in ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-2.5-flash-lite"]:
+                    try:
+                        kwargs = {"model": candidate_model, "contents": prompt}
+                        if config:
+                            kwargs["config"] = config
+                        response = self.client.models.generate_content(**kwargs)
+                        if response and response.text:
+                            return response.text.strip()
+                    except Exception as exc:
+                        logger.warning(f"Fallo con {candidate_model}: {exc}")
+                        continue
+                return self._mock_pedagogical_feedback(
+                    reference_text, language, overall_score, problem_words
                 )
-                return response.text
             elif HAS_GEMINI_SDK:
                 model = legacy_genai.GenerativeModel("gemini-1.5-flash")
                 response = model.generate_content(prompt)

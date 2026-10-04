@@ -36,6 +36,8 @@ class Exercise(BaseModel):
     title: str
     target_text: str
     ipa: Optional[str] = None
+    phonetic_guide: Optional[str] = None  # Pronunciación figurada amigable en español (ej. "Ij shpreje kain doitch")
+    phonetic_notes: Optional[str] = None  # Guía o equivalencia de símbolos (ej. "ç = ch suave, ʃ = sonido sh")
     translation_es: str
     focus_phonemes: List[str] = []
     tip: str

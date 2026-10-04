@@ -18,13 +18,49 @@ from tut_bot.services.gemini_coach import gemini_coach
 from tut_bot.services.telegram_bot import telegram_bot
 from tut_bot.services.tracker import tracker
 
+import time
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("tut_bot")
 
 
+async def cleanup_orphaned_audio_files(max_age_seconds: int = 1800):
+    """Limpia archivos de audio temporales huérfanos para no saturar memoria/disco en Jetson Nano."""
+    temp_dir = Path(tempfile.gettempdir())
+    now = time.time()
+    count = 0
+    patterns = ("tmp*.wav", "tmp*.ogg", "*_converted.wav", "*_voice.ogg")
+    for pattern in patterns:
+        for f in temp_dir.glob(pattern):
+            try:
+                if (now - f.stat().st_mtime) > max_age_seconds:
+                    f.unlink(missing_ok=True)
+                    count += 1
+            except Exception:
+                pass
+    if count > 0:
+        logger.info(f"Limpieza de disco: {count} archivo(s) de audio temporales eliminados.")
+
+
+async def periodic_temp_cleaner():
+    """Tarea en segundo plano que purga archivos temporales periódicamente."""
+    while True:
+        try:
+            await asyncio.sleep(21600)  # Cada 6 horas
+            await cleanup_orphaned_audio_files(max_age_seconds=1800)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.warning(f"Error en limpieza periódica de audios: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Ciclo de vida de la aplicación: inicializa Telegram Bot en segundo plano si está configurado."""
+    """Ciclo de vida de la aplicación: inicializa Telegram Bot y tareas de mantenimiento en segundo plano."""
+    # 1. Purgar cualquier archivo temporal residual al arrancar
+    await cleanup_orphaned_audio_files(max_age_seconds=600)
+    cleaner_task = asyncio.create_task(periodic_temp_cleaner())
+
     polling_task = None
     if settings.is_telegram_ready:
         logger.info("Iniciando integración con Telegram Bot...")
@@ -38,6 +74,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Limpieza en apagado
+    cleaner_task.cancel()
     if polling_task:
         await telegram_bot.stop()
         polling_task.cancel()
