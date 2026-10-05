@@ -89,6 +89,29 @@ class ProgressTracker:
                 cursor.execute(
                     "ALTER TABLE user_states ADD COLUMN passed_levels TEXT NOT NULL DEFAULT '[]'"
                 )
+            if "active_unit" not in cols:
+                cursor.execute(
+                    "ALTER TABLE user_states ADD COLUMN active_unit TEXT NOT NULL DEFAULT 'all'"
+                )
+
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS user_vocabulary (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    language TEXT NOT NULL,
+                    word TEXT NOT NULL,
+                    level TEXT NOT NULL DEFAULT 'A1',
+                    mastery_score INTEGER NOT NULL DEFAULT 1,
+                    first_seen TEXT NOT NULL,
+                    last_reviewed TEXT NOT NULL,
+                    UNIQUE(user_id, language, word)
+                )
+                """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_user_vocab ON user_vocabulary(user_id, language)"
+            )
             conn.commit()
 
     def get_user_state(self, user_id: str) -> Dict[str, Any]:
@@ -128,6 +151,7 @@ class ProgressTracker:
                     "completed_exercises": completed_exercises,
                     "unlocked_levels": unlocked_levels,
                     "passed_levels": passed_levels,
+                    "active_unit": row_dict.get("active_unit", "all"),
                     "updated_at": row_dict["updated_at"],
                 }
 
@@ -135,8 +159,8 @@ class ProgressTracker:
             now = datetime.now(timezone.utc).isoformat()
             cursor.execute(
                 """
-                INSERT INTO user_states (user_id, language, exercise_index, custom_phrase, skill_mode, level, fsm_state, completed_exercises, unlocked_levels, passed_levels, updated_at)
-                VALUES (?, 'de-DE', 0, NULL, 'speaking', 'A1', 'IN_EXERCISE', '[]', '["A1"]', '[]', ?)
+                INSERT INTO user_states (user_id, language, exercise_index, custom_phrase, skill_mode, level, fsm_state, completed_exercises, unlocked_levels, passed_levels, active_unit, updated_at)
+                VALUES (?, 'de-DE', 0, NULL, 'speaking', 'A1', 'IN_EXERCISE', '[]', '[\"A1\"]', '[]', 'all', ?)
                 """,
                 (user_id, now),
             )
@@ -152,6 +176,7 @@ class ProgressTracker:
                 "completed_exercises": [],
                 "unlocked_levels": ["A1"],
                 "passed_levels": [],
+                "active_unit": "all",
                 "updated_at": now,
             }
 
@@ -175,6 +200,7 @@ class ProgressTracker:
             conn.commit()
 
     def set_user_skill_mode(self, user_id: str, skill_mode: str):
+        self.get_user_state(user_id)
         now = datetime.now(timezone.utc).isoformat()
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -189,6 +215,7 @@ class ProgressTracker:
             conn.commit()
 
     def set_user_level(self, user_id: str, level: str):
+        self.get_user_state(user_id)
         now = datetime.now(timezone.utc).isoformat()
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -364,6 +391,87 @@ class ProgressTracker:
                 conn.commit()
             return next_level
         return None
+
+    def set_user_unit(self, user_id: str, unit_id: str):
+        """Fija la unidad temática activa del usuario y reinicia el índice del ejercicio."""
+        self.get_user_state(user_id)
+        now = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE user_states
+                SET active_unit = ?, exercise_index = 0, fsm_state = 'IN_EXERCISE', custom_phrase = NULL, updated_at = ?
+                WHERE user_id = ?
+                """,
+                (unit_id, now, user_id),
+            )
+            conn.commit()
+
+    def record_mastered_words(
+        self, user_id: str, language: str, words: List[str], level: str = "A1"
+    ) -> int:
+        """Registra palabras aprendidas en el inventario léxico del usuario. Retorna cuántas fueron nuevas."""
+        if not words:
+            return 0
+        from tut_bot.services.curriculum import match_known_words
+
+        valid_words = match_known_words(words, language, level)
+        if not valid_words:
+            return 0
+
+        now = datetime.now(timezone.utc).isoformat()
+        new_count = 0
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            for w in set(valid_words):
+                cursor.execute(
+                    """
+                    INSERT INTO user_vocabulary (user_id, language, word, level, mastery_score, first_seen, last_reviewed)
+                    VALUES (?, ?, ?, ?, 1, ?, ?)
+                    ON CONFLICT(user_id, language, word) DO UPDATE SET
+                        mastery_score = mastery_score + 1,
+                        last_reviewed = excluded.last_reviewed
+                    """,
+                    (user_id, language, w, level, now, now),
+                )
+                if cursor.rowcount == 1:
+                    new_count += 1
+            conn.commit()
+        return new_count
+
+    def get_user_mastered_words(self, user_id: str, language: str, level: str = "A1") -> List[str]:
+        """Obtiene la lista de palabras únicas que el usuario domina."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT word FROM user_vocabulary
+                WHERE user_id = ? AND language = ? AND level = ?
+                ORDER BY mastery_score DESC
+                """,
+                (user_id, language, level),
+            )
+            return [row["word"] for row in cursor.fetchall()]
+
+    def get_user_lexicon_progress(
+        self, user_id: str, language: str, level: str = "A1"
+    ) -> Dict[str, Any]:
+        """Calcula el progreso del usuario hacia la meta oficial del examen (ej: 650 palabras en A1)."""
+        from tut_bot.services.curriculum import TOTAL_A1_LEXICON_COUNT
+
+        mastered = self.get_user_mastered_words(user_id, language, level)
+        mastered_set = set(mastered)
+        total_target = TOTAL_A1_LEXICON_COUNT
+        count = len(mastered_set)
+        percent = min(100.0, (count / total_target) * 100.0) if total_target > 0 else 0.0
+
+        return {
+            "mastered_count": count,
+            "total_target": total_target,
+            "percentage": percent,
+            "mastered_words": mastered,
+        }
 
     def record_evaluation(
         self,

@@ -56,6 +56,8 @@ class Exercise(BaseModel):
     vocabulary_breakdown: Optional[dict] = (
         None  # Desglose de vocabulario de la frase {"Buch": "el libro (neutro das Buch)"}
     )
+    unit_id: Optional[str] = None  # ej: "unit_1", "unit_2", etc.
+    unit_title: Optional[str] = None  # ej: "Unidad 1: Saludos y Presentaciones"
 
 
 class WritingEvaluationResponse(BaseModel):

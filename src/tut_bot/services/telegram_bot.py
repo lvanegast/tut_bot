@@ -24,6 +24,11 @@ from telegram.ext import (
 from tut_bot.config import settings
 from tut_bot.services.audio_converter import audio_converter
 from tut_bot.services.azure_speech import azure_service
+from tut_bot.services.curriculum import (
+    extract_words_from_text,
+    get_curriculum_units,
+    get_unit_by_id,
+)
 from tut_bot.services.exercises import get_exercises
 from tut_bot.services.gemini_coach import gemini_coach
 from tut_bot.services.tracker import tracker
@@ -193,6 +198,11 @@ class TelegramCoachBot:
         app.add_handler(CommandHandler(["modo", "skill", "habilidad"], self.cmd_mode))
         app.add_handler(CommandHandler(["nivel", "level"], self.cmd_level))
         app.add_handler(CommandHandler(["palabra", "vocabulario", "definir"], self.cmd_vocab))
+        app.add_handler(
+            CommandHandler(
+                ["tema", "temas", "unidad", "unidades", "modulo", "modulos"], self.cmd_units
+            )
+        )
         app.add_handler(CommandHandler(["libre", "custom", "fraselibre"], self.cmd_custom_phrase))
         app.add_handler(CommandHandler(["stats", "estadisticas", "progreso"], self.cmd_stats))
         app.add_handler(CommandHandler(["web", "panel", "link", "dashboard"], self.cmd_web))
@@ -312,12 +322,14 @@ class TelegramCoachBot:
         await self._safe_reply_text(update.effective_message, help_text)
 
     async def cmd_mode(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Menú interactivo para cambiar Modalidad y Nivel MCER."""
+        """Menú interactivo para cambiar Modalidad, Nivel MCER y Unidad Temática."""
         user_id = f"tg_{update.effective_user.id}"
         state = tracker.get_user_state(user_id)
         current_skill = state.get("skill_mode", "speaking")
         current_level = state.get("level", "A1")
-        lang_flag = "🇩🇪 Alemán" if state["language"].startswith("de") else "🇺🇸 Inglés"
+        active_unit = state.get("active_unit", "all")
+        lang = state["language"]
+        lang_flag = "🇩🇪 Alemán" if lang.startswith("de") else "🇺🇸 Inglés"
 
         skill_labels = {
             "speaking": "🗣️ Hablar (Pronunciación IPA)",
@@ -325,17 +337,23 @@ class TelegramCoachBot:
             "listening": "👂 Comprender (Audición y Vocabulario)",
         }
 
+        unit_label = "🌐 Todas las Unidades"
+        if active_unit != "all":
+            u_obj = get_unit_by_id(active_unit, lang, current_level)
+            if u_obj:
+                unit_label = f"{u_obj.icon} U{u_obj.number}: {u_obj.title_es}"
+
         msg = (
             f"🎯 <b>Configuración de Entrenamiento</b>\n\n"
             f"• <b>Idioma:</b> {lang_flag}\n"
             f"• <b>Modalidad Actual:</b> {skill_labels.get(current_skill, current_skill)}\n"
-            f"• <b>Nivel MCER:</b> {current_level}\n\n"
-            f"👇 <b>Elige qué habilidad deseas practicar o cambia tu nivel:</b>"
+            f"• <b>Nivel MCER:</b> {current_level}\n"
+            f"• <b>Unidad Activa:</b> {unit_label}\n\n"
+            f"👇 <b>Elige habilidad, nivel o selecciona una unidad temática:</b>"
         )
 
         unlocked = state.get("unlocked_levels", ["A1"])
         passed = state.get("passed_levels", [])
-        lang = state["language"]
 
         def get_lvl_label(lvl: str) -> str:
             if f"{lang}_{lvl}_{current_skill}" in passed:
@@ -357,12 +375,61 @@ class TelegramCoachBot:
                 InlineKeyboardButton(get_lvl_label("B1"), callback_data="level_B1"),
             ],
             [
+                InlineKeyboardButton("📂 Seleccionar Unidad Temática", callback_data="btn_units_menu"),
+            ],
+            [
                 InlineKeyboardButton("📚 Ir al Ejercicio", callback_data="btn_exercise"),
                 InlineKeyboardButton("🏠 Menú Principal", callback_data="btn_start_menu"),
             ],
         ]
         await self._safe_reply_text(
             update.effective_message, msg, reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+    async def cmd_units(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Muestra el catálogo de Unidades Temáticas oficiales para el nivel actual."""
+        user_id = f"tg_{update.effective_user.id}"
+        state = tracker.get_user_state(user_id)
+        lang = state["language"]
+        level = state.get("level", "A1")
+        active_unit = state.get("active_unit", "all")
+        units = get_curriculum_units(lang, level)
+
+        lang_name = "🇩🇪 Alemán" if lang.startswith("de") else "🇺🇸 Inglés"
+        exam_name = (
+            "Goethe-Zertifikat A1: Start Deutsch 1"
+            if lang.startswith("de")
+            else "Cambridge A1 Key"
+        )
+
+        msg = (
+            f"📚 <b>Unidades Temáticas — {lang_name} [{level}]</b>\n"
+            f"<i>Estándar oficial: {exam_name} (~650 palabras)</i>\n\n"
+            f"👇 <b>Selecciona la Unidad que deseas entrenar:</b>"
+        )
+
+        buttons = []
+        for u in units:
+            prefix = "🔘 " if active_unit == u.id else ""
+            btn_text = f"{prefix}{u.icon} U{u.number}: {u.title_es}"
+            buttons.append([InlineKeyboardButton(btn_text, callback_data=f"unit_{u.id}")])
+
+        prefix_all = "🔘 " if active_unit == "all" else ""
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    f"{prefix_all}🌐 Todas las Unidades", callback_data="unit_all"
+                )
+            ]
+        )
+        buttons.append(
+            [
+                InlineKeyboardButton("📚 Ir al Ejercicio", callback_data="btn_exercise"),
+                InlineKeyboardButton("🎯 Modo y Nivel", callback_data="btn_mode_menu"),
+            ]
+        )
+        await self._safe_reply_text(
+            update.effective_message, msg, reply_markup=InlineKeyboardMarkup(buttons)
         )
 
     async def cmd_level(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -502,8 +569,13 @@ class TelegramCoachBot:
         lang = state["language"]
         skill_mode = state.get("skill_mode", "speaking")
         level = state.get("level", "A1")
+        active_unit = state.get("active_unit", "all")
 
-        exercises = get_exercises(language=lang, level=level, skill_type=skill_mode)
+        exercises = get_exercises(
+            language=lang, level=level, skill_type=skill_mode, unit_id=active_unit
+        )
+        if not exercises:
+            exercises = get_exercises(language=lang, level=level, skill_type=skill_mode)
         if not exercises:
             exercises = get_exercises(language=lang, skill_type=skill_mode)
         if not exercises:
@@ -538,10 +610,12 @@ class TelegramCoachBot:
         tracker.set_user_custom_phrase(user_id, None)
 
         lang_header = "🇩🇪 ALEMÁN" if lang.startswith("de") else "🇺🇸 INGLÉS"
+        u_info = get_unit_by_id(ex.unit_id or "unit_1", lang, level)
+        u_badge = f" · {u_info.icon} U{u_info.number}" if u_info else ""
 
         if skill_mode == "writing":
             card_lines = [
-                f"✍️ <b>{lang_header} — [{ex.level}] {ex.category}</b>",
+                f"✍️ <b>{lang_header} — [{ex.level}{u_badge}] {ex.category}</b>",
                 f"<b>Tema:</b> {ex.title}\n",
                 "📝 <b>Consigna de Escritura:</b>",
                 f"👉 <b>{ex.prompt or 'Traduce al alemán:'}</b>\n",
@@ -565,14 +639,15 @@ class TelegramCoachBot:
                     InlineKeyboardButton("Siguiente ➡️", callback_data="ex_next"),
                 ],
                 [
-                    InlineKeyboardButton("🎯 Cambiar Modo/Nivel", callback_data="btn_mode_menu"),
+                    InlineKeyboardButton("📂 Unidad", callback_data="btn_units_menu"),
+                    InlineKeyboardButton("🎯 Modo/Nivel", callback_data="btn_mode_menu"),
                     InlineKeyboardButton("📊 Estadísticas", callback_data="btn_stats"),
                 ],
             ]
 
         elif skill_mode == "listening":
             card_lines = [
-                f"👂 <b>{lang_header} — [{ex.level}] {ex.category}</b>",
+                f"👂 <b>{lang_header} — [{ex.level}{u_badge}] {ex.category}</b>",
                 f"<b>Tema:</b> {ex.title}\n",
                 "🎧 <b>Pregunta de Comprensión:</b>",
                 f"👉 <b>{ex.prompt or 'Escucha el audio nativo y responde:'}</b>\n",
@@ -625,9 +700,8 @@ class TelegramCoachBot:
                         InlineKeyboardButton("Siguiente ➡️", callback_data="ex_next"),
                     ],
                     [
-                        InlineKeyboardButton(
-                            "🎯 Cambiar Modo/Nivel", callback_data="btn_mode_menu"
-                        ),
+                        InlineKeyboardButton("📂 Unidad", callback_data="btn_units_menu"),
+                        InlineKeyboardButton("🎯 Modo/Nivel", callback_data="btn_mode_menu"),
                         InlineKeyboardButton("📊 Estadísticas", callback_data="btn_stats"),
                     ],
                 ]
@@ -637,7 +711,7 @@ class TelegramCoachBot:
             # Modo SPEAKING (Hablar)
             phonemes_str = " · ".join([f"<code>/{p}/</code>" for p in ex.focus_phonemes])
             card_lines = [
-                f"🗣️ <b>{lang_header} — [{ex.level}] {ex.category}</b>",
+                f"🗣️ <b>{lang_header} — [{ex.level}{u_badge}] {ex.category}</b>",
                 f"<b>Tema:</b> {ex.title}\n",
                 "🗣️ <b>Frase a pronunciar:</b>",
                 f'👉 <b>"{ex.target_text}"</b>\n',
@@ -673,7 +747,8 @@ class TelegramCoachBot:
                     InlineKeyboardButton("Siguiente ➡️", callback_data="ex_next"),
                 ],
                 [
-                    InlineKeyboardButton("🎯 Cambiar Modo/Nivel", callback_data="btn_mode_menu"),
+                    InlineKeyboardButton("📂 Unidad", callback_data="btn_units_menu"),
+                    InlineKeyboardButton("🎯 Modo/Nivel", callback_data="btn_mode_menu"),
                     InlineKeyboardButton("📊 Estadísticas", callback_data="btn_stats"),
                 ],
             ]
@@ -701,11 +776,32 @@ class TelegramCoachBot:
 
     async def _send_stats(self, update: Update, user_id: str, edit_message: bool = False):
         stats = tracker.get_user_stats(user_id)
+        user_state = tracker.get_user_state(user_id)
+        lang = user_state["language"]
+        level = user_state.get("level", "A1")
+        exam_name = (
+            "Goethe Start Deutsch 1"
+            if lang.startswith("de")
+            else "Cambridge A1 Key"
+        )
+
+        lex_prog = tracker.get_user_lexicon_progress(user_id, lang, level)
+        mastered_cnt = lex_prog["mastered_count"]
+        total_target = lex_prog["total_target"]
+        lex_percent = lex_prog["percentage"]
+        lex_bar = _make_progress_bar(lex_percent)
+
+        lex_section = (
+            f"📚 <b>Inventario Léxico {level} ({exam_name}):</b>\n"
+            f"• <code>[{lex_bar}]</code> <b>{mastered_cnt} / {total_target}</b> palabras dominadas ({lex_percent:.1f}%)\n\n"
+        )
+
         if stats["total_attempts"] == 0:
             text = (
-                "📊 <b>Tus Estadísticas en tut_bot</b>\n\n"
-                "Aún no has realizado ninguna práctica con notas de voz.\n"
-                "¡Usa /ejercicio y envía tu primer audio para comenzar tu registro!"
+                f"📊 <b>Tus Estadísticas en tut_bot</b>\n\n"
+                f"{lex_section}"
+                "🗣️ <i>Aún no has realizado prácticas de fonética con notas de voz.</i>\n"
+                "¡Usa /ejercicio y envía tu primer audio para comenzar tu registro acústico!"
             )
         else:
             avg_acc = stats["average_accuracy"]
@@ -721,7 +817,9 @@ class TelegramCoachBot:
             )
 
             text = (
-                "📊 <b>Tus Estadísticas de Pronunciación</b>\n\n"
+                f"📊 <b>Tus Estadísticas en tut_bot</b>\n\n"
+                f"{lex_section}"
+                "🗣️ <b>Pronunciación y Fluidez:</b>\n"
                 f"• <b>Intentos totales:</b> {stats['total_attempts']}\n"
                 f"• <b>Precisión Media:</b> <code>[{acc_bar}]</code> {avg_acc:.0f}%\n"
                 f"• <b>Fluidez Media:</b>   <code>[{flu_bar}]</code> {avg_flu:.0f}%\n\n"
@@ -729,8 +827,14 @@ class TelegramCoachBot:
             )
 
         keyboard = [
-            [InlineKeyboardButton("📚 Ir a Ejercicios", callback_data="btn_exercise")],
-            [InlineKeyboardButton("🏠 Menú Principal", callback_data="btn_start_menu")],
+            [
+                InlineKeyboardButton("📚 Ir a Ejercicios", callback_data="btn_exercise"),
+                InlineKeyboardButton("📂 Unidades Temáticas", callback_data="btn_units_menu"),
+            ],
+            [
+                InlineKeyboardButton("🎯 Modo y Nivel", callback_data="btn_mode_menu"),
+                InlineKeyboardButton("🏠 Menú Principal", callback_data="btn_start_menu"),
+            ],
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -786,6 +890,23 @@ class TelegramCoachBot:
 
         elif data == "btn_mode_menu":
             await self.cmd_mode(update, context)
+
+        elif data == "btn_units_menu":
+            await self.cmd_units(update, context)
+
+        elif data.startswith("unit_"):
+            new_unit = data.replace("unit_", "")
+            tracker.set_user_unit(user_id, new_unit)
+            state = tracker.get_user_state(user_id)
+            if new_unit == "all":
+                unit_desc = "Todas las Unidades"
+            else:
+                u_obj = get_unit_by_id(new_unit, state["language"], state.get("level", "A1"))
+                unit_desc = f"{u_obj.icon} {u_obj.title_es}" if u_obj else new_unit
+            await self._safe_edit_text(
+                query, f"✅ Unidad Temática seleccionada: <b>{unit_desc}</b>."
+            )
+            await self._send_exercise_card(update, user_id, edit_message=False)
 
         elif data.startswith("mode_"):
             new_mode = data.replace("mode_", "")
@@ -890,6 +1011,12 @@ class TelegramCoachBot:
 
             if is_correct:
                 tracker.mark_exercise_completed(user_id, ex.id)
+                words = extract_words_from_text(ex.target_text)
+                if ex.vocabulary_breakdown:
+                    words.extend(list(ex.vocabulary_breakdown.keys()))
+                tracker.record_mastered_words(
+                    user_id, state["language"], words, level=state.get("level", "A1")
+                )
                 res_msg = (
                     f"🟢 <b>¡Correcto!</b> 🎉\n\n"
                     f'Seleccionaste: <i>"{chosen_str}"</i>\n'
@@ -1108,6 +1235,10 @@ class TelegramCoachBot:
 
             if eval_res.is_correct or eval_res.score >= 60:
                 tracker.mark_exercise_completed(user_id, ex.id)
+                words = extract_words_from_text(ex.target_text)
+                if ex.vocabulary_breakdown:
+                    words.extend(list(ex.vocabulary_breakdown.keys()))
+                tracker.record_mastered_words(user_id, lang, words, level=ex.level)
 
             badge = (
                 "🟢 <b>¡Excelente trabajo!</b> 🎉"
@@ -1219,6 +1350,10 @@ class TelegramCoachBot:
 
                 if is_correct:
                     tracker.mark_exercise_completed(user_id, ex.id)
+                    words = extract_words_from_text(ex.target_text)
+                    if ex.vocabulary_breakdown:
+                        words.extend(list(ex.vocabulary_breakdown.keys()))
+                    tracker.record_mastered_words(user_id, lang, words, level=level)
                     res_msg = (
                         f"🟢 <b>¡Correcto!</b> 🎉\n\n"
                         f"Seleccionaste: <b>{selected_option_idx + 1}️⃣ {chosen_str}</b>\n"
@@ -1265,6 +1400,10 @@ class TelegramCoachBot:
 
             if comp_res.get("is_correct"):
                 tracker.mark_exercise_completed(user_id, ex.id)
+                words = extract_words_from_text(ex.target_text)
+                if ex.vocabulary_breakdown:
+                    words.extend(list(ex.vocabulary_breakdown.keys()))
+                tracker.record_mastered_words(user_id, lang, words, level=level)
 
             badge = (
                 "🟢 <b>¡Correcto!</b> 🎉" if comp_res.get("is_correct") else "🟡 <b>Atención</b> 🎧"
@@ -1388,6 +1527,12 @@ class TelegramCoachBot:
 
             if not is_custom and eval_result.overall_score >= 60 and idx < len(exercises):
                 tracker.mark_exercise_completed(user_id, exercises[idx].id)
+                words = extract_words_from_text(reference_text)
+                if exercises[idx].vocabulary_breakdown:
+                    words.extend(list(exercises[idx].vocabulary_breakdown.keys()))
+                tracker.record_mastered_words(
+                    user_id, lang, words, level=state.get("level", "A1")
+                )
 
             # 6. Formatear reporte de Telegram
             score = eval_result.overall_score

@@ -278,6 +278,52 @@ def test_fsm_progression_and_level_graduation():
     assert "de_a1_spk_01" in state["completed_exercises"]
 
 
+def test_curriculum_and_vocabulary_tracking():
+    from tut_bot.services.curriculum import (
+        TOTAL_A1_LEXICON_COUNT,
+        get_curriculum_units,
+        get_unit_by_id,
+    )
+    from tut_bot.services.exercises import get_exercises
+    from tut_bot.services.tracker import tracker
+
+    # 1. Malla curricular oficial A1: 6 unidades en alemán y 6 en inglés
+    de_units = get_curriculum_units("de-DE", "A1")
+    assert len(de_units) == 6
+    assert de_units[0].id == "unit_1"
+    assert de_units[1].id == "unit_2"
+    assert "kaffee" in [w.lower() for w in de_units[1].target_words]
+
+    en_units = get_curriculum_units("en-US", "A1")
+    assert len(en_units) == 6
+    assert en_units[0].id == "unit_1"
+
+    u2 = get_unit_by_id("unit_2", "de-DE", "A1")
+    assert u2 is not None
+    assert u2.icon == "☕"
+
+    # 2. Selección de unidad en tracker
+    user_id = "test_user_curriculum_01"
+    tracker.set_user_unit(user_id, "unit_2")
+    state = tracker.get_user_state(user_id)
+    assert state["active_unit"] == "unit_2"
+
+    # 3. Filtrado de ejercicios por unidad temática
+    unit_exs = get_exercises(language="de-DE", level="A1", unit_id="unit_2")
+    assert len(unit_exs) > 0
+
+    # 4. Registro y progreso de inventario léxico (Goethe Start Deutsch 1 - 650 palabras)
+    learned = ["kaffee", "brot", "wasser", "xyz_no_existe_en_goethe"]
+    added_count = tracker.record_mastered_words(user_id, "de-DE", learned, level="A1")
+    assert added_count >= 3
+
+    progress = tracker.get_user_lexicon_progress(user_id, "de-DE", "A1")
+    assert progress["total_target"] == TOTAL_A1_LEXICON_COUNT
+    assert progress["mastered_count"] >= 3
+    assert progress["percentage"] > 0.0
+    assert "kaffee" in progress["mastered_words"]
+
+
 if __name__ == "__main__":
     test_health_endpoint()
     test_exercises_endpoints()
@@ -291,4 +337,5 @@ if __name__ == "__main__":
     test_gemini_coach_multiskill()
     test_telegram_bot_service()
     test_fsm_progression_and_level_graduation()
+    test_curriculum_and_vocabulary_tracking()
     print("\n[EXITO] Todas las pruebas unitarias pasaron correctamente!")

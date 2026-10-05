@@ -1713,11 +1713,33 @@ EXERCISES_DATABASE: List[Exercise] = [
 ]
 
 
+def _infer_unit_id(ex: Exercise) -> str:
+    """Infiere la unidad curricular temática de Goethe/Cambridge a partir del contenido del ejercicio."""
+    if ex.unit_id:
+        return ex.unit_id
+    cat = (ex.category or "").lower()
+    title = (ex.title or "").lower()
+    text = (ex.target_text or "").lower()
+    full = f"{cat} {title} {text}"
+    if any(k in full for k in ["einkauf", "preis", "essen", "trink", "kaffee", "kost", "food", "drink", "order", "bill", "restaurant"]):
+        return "unit_2"
+    if any(k in full for k in ["familie", "eltern", "bruder", "schwester", "family", "friend", "sister", "brother", "mother", "father"]):
+        return "unit_3"
+    if any(k in full for k in ["uhr", "zeit", "alltag", "wohnung", "time", "clock", "house", "room", "routine"]):
+        return "unit_4"
+    if any(k in full for k in ["stadt", "zug", "bahn", "bus", "weg", "city", "train", "station", "direction", "verkehr"]):
+        return "unit_5"
+    if any(k in full for k in ["wetter", "gesund", "arzt", "krank", "sport", "weather", "health", "hobby", "freizeit"]):
+        return "unit_6"
+    return "unit_1"
+
+
 def get_exercises(
     language: Optional[str] = None,
     category: Optional[str] = None,
     level: Optional[str] = None,
     skill_type: Optional[str] = None,
+    unit_id: Optional[str] = None,
 ) -> List[Exercise]:
     results = EXERCISES_DATABASE
     if language:
@@ -1733,6 +1755,10 @@ def get_exercises(
             else skill_type.lower()
         )
         results = [e for e in results if (e.skill_type or "speaking").lower() == target_skill]
+    if unit_id and unit_id.lower() != "all":
+        filtered = [e for e in results if (e.unit_id or _infer_unit_id(e)).lower() == unit_id.lower()]
+        if filtered:
+            return filtered
     return results
 
 
