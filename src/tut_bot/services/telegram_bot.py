@@ -490,6 +490,14 @@ class TelegramCoachBot:
                 "🎧 <b>Pregunta de Comprensión:</b>",
                 f"👉 <b>{ex.prompt or 'Escucha el audio nativo y responde:'}</b>\n",
             ]
+
+            # Andamiaje cognitivo (Scaffolding): Vocabulario clave visible antes de escuchar
+            if ex.vocabulary_breakdown:
+                card_lines.append("🔑 <b>Vocabulario de apoyo:</b>")
+                for w, meaning in list(ex.vocabulary_breakdown.items())[:3]:
+                    card_lines.append(f"• <b>{w}</b>: {meaning}")
+                card_lines.append("")
+
             if ex.options:
                 card_lines.append("<b>Opciones:</b>")
                 for i, opt in enumerate(ex.options):
@@ -498,7 +506,7 @@ class TelegramCoachBot:
             card_lines.extend(
                 [
                     f"<i>(Ejercicio {idx + 1} de {len(exercises)})</i>",
-                    "👇 <b>Toca 'Escuchar Audio' y luego pulsa la opción correcta o responde por texto:</b>",
+                    "👇 <b>Escucha el audio y luego pulsa la opción correcta o responde por texto:</b>",
                 ]
             )
 
@@ -511,8 +519,11 @@ class TelegramCoachBot:
 
             keyboard = [
                 [
-                    InlineKeyboardButton("🔊 Escuchar Audio", callback_data=f"tts_{ex.id}"),
-                    InlineKeyboardButton("📖 Vocabulario", callback_data="vocab_card"),
+                    InlineKeyboardButton("🔊 Escuchar (1.0x)", callback_data=f"tts_{ex.id}"),
+                    InlineKeyboardButton("🐢 Lento (0.8x)", callback_data=f"tts_slow_{ex.id}"),
+                ],
+                [
+                    InlineKeyboardButton("📖 Vocabulario Completo", callback_data="vocab_card"),
                 ],
             ]
             if opt_buttons:
@@ -563,7 +574,10 @@ class TelegramCoachBot:
             )
             keyboard = [
                 [
-                    InlineKeyboardButton("🔊 Escuchar Referencia", callback_data=f"tts_{ex.id}"),
+                    InlineKeyboardButton("🔊 Escuchar (1.0x)", callback_data=f"tts_{ex.id}"),
+                    InlineKeyboardButton("🐢 Lento (0.8x)", callback_data=f"tts_slow_{ex.id}"),
+                ],
+                [
                     InlineKeyboardButton("📖 Vocabulario", callback_data="vocab_card"),
                 ],
                 [
@@ -834,8 +848,11 @@ class TelegramCoachBot:
             tracker.set_user_exercise_index(user_id, prev_idx)
             await self._send_exercise_card(update, user_id, edit_message=True)
 
+        elif data.startswith("tts_slow_"):
+            await self._send_tts_reference(query, user_id, data, slow=True)
+
         elif data.startswith("tts_"):
-            await self._send_tts_reference(query, user_id, data)
+            await self._send_tts_reference(query, user_id, data, slow=False)
 
         elif data == "btn_web":
             url = settings.WEB_BASE_URL or f"http://{settings.HOST}:{settings.PORT}"
@@ -844,12 +861,13 @@ class TelegramCoachBot:
                 f"🖥️ <b>Panel Web de tut_bot:</b>\n<code>{url}</code>\n\nUsa /ejercicio para volver al entrenamiento.",
             )
 
-    async def _send_tts_reference(self, query, user_id: str, data: str):
-        """Sintetiza la voz nativa y la envía como nota de voz a Telegram."""
+    async def _send_tts_reference(self, query, user_id: str, data: str, slow: bool = False):
+        """Sintetiza la voz nativa y la envía como nota de voz a Telegram (con opción de audio lento)."""
         state = tracker.get_user_state(user_id)
         lang = state["language"]
 
-        if data == "tts_custom" and state.get("custom_phrase"):
+        actual_id = data.replace("tts_slow_", "").replace("tts_", "")
+        if actual_id == "custom" and state.get("custom_phrase"):
             text = state["custom_phrase"]
         else:
             exercises = get_exercises(
@@ -859,22 +877,33 @@ class TelegramCoachBot:
             )
             if not exercises:
                 exercises = get_exercises(language=lang)
-            idx = state["exercise_index"] % len(exercises)
-            text = exercises[idx].target_text
+            # Buscar por ID si está especificado
+            matching = [e for e in exercises if e.id == actual_id]
+            if matching:
+                text = matching[0].target_text
+            else:
+                idx = state["exercise_index"] % len(exercises)
+                text = exercises[idx].target_text
 
-        wav_bytes = azure_service.text_to_speech(text=text, language=lang)
+        wav_bytes = azure_service.text_to_speech(text=text, language=lang, slow=slow)
         if not wav_bytes:
             await query.message.reply_text("⚠️ No se pudo generar el audio nativo de referencia.")
             return
 
         ogg_bytes = audio_converter.wav_to_ogg_opus(wav_bytes)
         audio_stream = io.BytesIO(ogg_bytes if ogg_bytes else wav_bytes)
-        audio_stream.name = "referencia_nativa.ogg" if ogg_bytes else "referencia_nativa.wav"
+        audio_stream.name = "referencia_lenta.ogg" if slow else "referencia_nativa.ogg"
 
         caption_flag = "🇩🇪" if lang.startswith("de") else "🇺🇸"
+        icon = "🐢" if slow else "🔊"
+        label = (
+            f"{icon} <b>Referencia pausada (0.8x - {caption_flag}):</b>"
+            if slow
+            else f"{icon} <b>Referencia nativa ({caption_flag}):</b>"
+        )
         await query.message.reply_voice(
             voice=audio_stream,
-            caption=f'🔊 <b>Referencia nativa ({caption_flag}):</b>\n"{text}"',
+            caption=f'{label}\n"{text}"',
             parse_mode=ParseMode.HTML,
         )
 

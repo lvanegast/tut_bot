@@ -106,23 +106,40 @@ class AzureSpeechService:
 
     assess_pronunciation = evaluate_pronunciation
 
-    def synthesize_speech(self, text: str, language: str = "de-DE") -> Optional[bytes]:
-        """Sintetiza audio nativo con Azure TTS para escuchar la pronunciación de referencia."""
+    def synthesize_speech(
+        self, text: str, language: str = "de-DE", slow: bool = False
+    ) -> Optional[bytes]:
+        """Sintetiza audio nativo con Azure TTS, con opción de velocidad pausada (0.8x) para principiantes A1."""
         if not self.is_available():
             return None
 
         try:
             speech_config = speechsdk.SpeechConfig(subscription=self.key, region=self.region)
-            # Voces neurales de alta calidad
-            if language.startswith("de"):
-                speech_config.speech_synthesis_voice_name = "de-DE-KatjaNeural"
-            else:
-                speech_config.speech_synthesis_voice_name = "en-US-JennyNeural"
+            voice_name = "de-DE-KatjaNeural" if language.startswith("de") else "en-US-JennyNeural"
+            speech_config.speech_synthesis_voice_name = voice_name
 
             speech_synthesizer = speechsdk.SpeechSynthesizer(
                 speech_config=speech_config, audio_config=None
             )
-            result = speech_synthesizer.speak_text_async(text).get()
+
+            if slow:
+                lang_code = "de-DE" if language.startswith("de") else "en-US"
+                # Escapar caracteres XML básicos para SSML seguro
+                escaped_text = (
+                    text.replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+                    .replace('"', "&quot;")
+                )
+                ssml = (
+                    f"<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='{lang_code}'>"
+                    f"<voice name='{voice_name}'>"
+                    f"<prosody rate='-20%'>{escaped_text}</prosody>"
+                    f"</voice></speak>"
+                )
+                result = speech_synthesizer.speak_ssml_async(ssml).get()
+            else:
+                result = speech_synthesizer.speak_text_async(text).get()
 
             if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
                 return result.audio_data
