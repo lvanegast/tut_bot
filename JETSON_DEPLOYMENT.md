@@ -35,9 +35,10 @@ docker ps
 docker stats --no-stream
 ```
 
-### Paso 2: Crear el Directorio Aislado
+### Paso 2: Clonar el Repositorio en la Carpeta Aislada
 ```bash
-mkdir -p /home/lvant/Documents/proyecto_b
+cd /home/lvant/Documents
+git clone https://github.com/lvanegast/tut_bot.git proyecto_b
 cd /home/lvant/Documents/proyecto_b
 ```
 
@@ -45,17 +46,12 @@ cd /home/lvant/Documents/proyecto_b
 
 ## 3. Métodos de Despliegue
 
-### Opción A: Transferencia directa por SCP / Git y Build Nativo en la Jetson (Recomendada)
-1. **Copiar los archivos del proyecto desde la máquina de desarrollo a la Jetson:**
-   *(Ejecutar desde la máquina local)*
-   ```bash
-   scp -r C:\Proyectos\tut_bot\* lvant@192.168.10.10:/home/lvant/Documents/proyecto_b/
-   ```
-2. **En la Jetson, asegurar el archivo `.env`:**
+### Opción A: Despliegue directo con Git Clone en la Jetson (Recomendada)
+1. **En la Jetson, configurar el archivo `.env`:**
    ```bash
    cd /home/lvant/Documents/proyecto_b
-   # Asegurar las variables de entorno necesarias
-   cat << 'EOF' > .env
+   cp .env.example .env
+   nano .env
    PORT=8000
    HOST=0.0.0.0
    TELEGRAM_BOT_TOKEN=tu_token_de_telegram
