@@ -8,7 +8,7 @@ set -euo pipefail
 
 JETSON_HOST="${1:-192.168.10.10}"
 JETSON_USER="${2:-lvant}"
-REMOTE_DIR="${3:-/home/lvant/Documents/proyecto_b}"
+REMOTE_DIR="${3:-/home/lvant/Documents/tut_bot}"
 
 echo "========================================================="
 echo "  Despliegue Seguro de tut_bot en NVIDIA Jetson Nano"

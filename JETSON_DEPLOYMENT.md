@@ -1,4 +1,4 @@
-# 🚀 Manual de Despliegue en NVIDIA Jetson Nano — Proyecto B (tut_bot)
+# 🚀 Manual de Despliegue en NVIDIA Jetson Nano — tut_bot
 
 Este documento detalla las directrices operativas, la configuración de contenedores y los procedimientos de verificación para desplegar **tut_bot** en la **NVIDIA Jetson Nano B01**, garantizando convivencia armónica con el bot de trading preexistente (24/7).
 
@@ -6,14 +6,14 @@ Este documento detalla las directrices operativas, la configuración de contened
 
 ## 1. Ficha Técnica y Verificación de Compatibilidad
 
-| Parámetro | Host (Jetson Nano) | Proyecto B (tut_bot) | Estado |
+| Parámetro | Host (Jetson Nano) | tut_bot | Estado |
 | :--- | :--- | :--- | :--- |
 | **Arquitectura CPU** | `ARM64` (`aarch64`) | `python:3.10-slim` (arm64) | ✅ Compatible sin emulación |
 | **RAM Asignada** | 4 GB total (~2.2 GB libre) | Límite: **768 MB** (consumo medio: ~220 MB) | ✅ Seguro contra OOM Killer |
 | **CPU Cores** | 4 Cores ARM Cortex-A57 | Límite: **1.5 cores** (`cpus: 1.5`) | ✅ Evita saturación de CPU |
 | **Puertos Host** | `22` (SSH), `8080` (Trading), `5432` (Postgres) | **`8000`** (FastAPI / Webhook) | ✅ **Cero colisión de puertos** |
 | **Red Docker** | Red aislada de trading | `tutbot_network` (bridge independiente) | ✅ Aislamiento de red total |
-| **Persistencia** | `/home/lvant/Documents/proyecto_b/data` | Montaje `./data:/app/data` (SQLite) | ✅ Datos de usuarios persistentes |
+| **Persistencia** | `/home/lvant/Documents/tut_bot/data` | Montaje `./data:/app/data` (SQLite) | ✅ Datos de usuarios persistentes |
 | **Resiliencia** | Reinicios / cortes de energía | `restart: unless-stopped` | ✅ Auto-recuperación activa |
 
 ---
@@ -35,58 +35,35 @@ docker ps
 docker stats --no-stream
 ```
 
-### Paso 2: Clonar el Repositorio en la Carpeta Aislada
+### Paso 2: Clonar el Repositorio
 ```bash
 cd /home/lvant/Documents
-git clone https://github.com/lvanegast/tut_bot.git proyecto_b
-cd /home/lvant/Documents/proyecto_b
+git clone https://github.com/lvanegast/tut_bot.git
+cd /home/lvant/Documents/tut_bot
 ```
 
 ---
 
-## 3. Métodos de Despliegue
+## 3. Despliegue con Docker Compose
 
-### Opción A: Despliegue directo con Git Clone en la Jetson (Recomendada)
-1. **En la Jetson, configurar el archivo `.env`:**
+1. **Configurar el archivo `.env`:**
    ```bash
-   cd /home/lvant/Documents/proyecto_b
    cp .env.example .env
    nano .env
-   PORT=8000
-   HOST=0.0.0.0
-   TELEGRAM_BOT_TOKEN=tu_token_de_telegram
-   GEMINI_API_KEY=tu_api_key_de_gemini
-   AZURE_SPEECH_KEY=tu_azure_speech_key
-   AZURE_SPEECH_REGION=eastus
-   IS_MOCK_MODE=false
-   DATA_DIR=/app/data
-   EOF
    ```
-3. **Construir y levantar el contenedor con Docker Compose:**
+   *(Ingresa tus credenciales de Telegram, Gemini y Azure; guarda con `Ctrl+O` y sal con `Ctrl+X`)*.
+
+2. **Construir y levantar el contenedor con Docker Compose:**
    ```bash
    docker-compose up -d --build
    ```
-
----
-
-### Opción B: Cross-Compilation en PC con Docker Buildx (Si se desea ahorrar CPU en la Jetson)
-*(Ejecutar en la máquina de desarrollo con soporte Docker Buildx)*:
-```bash
-# 1. Compilar imagen dirigida a arquitectura ARM64
-docker buildx build --platform linux/arm64 -t tutbot:arm64 --load .
-
-# 2. Exportar y transferir comprimida por SSH a la Jetson
-docker save tutbot:arm64 | gzip | ssh lvant@192.168.10.10 "gunzip | docker load"
-
-# 3. En la Jetson, levantar usando la imagen cargada
-ssh lvant@192.168.10.10 "cd /home/lvant/Documents/proyecto_b && docker-compose up -d"
-```
+   *(O `docker compose up -d --build` si utilizas Compose v2)*.
 
 ---
 
 ## 4. Verificación y Monitoreo Post-Despliegue
 
-Inmediatamente después de ejecutar `docker-compose up -d`, ejecuta:
+Inmediatamente después de levantar el contenedor, ejecuta:
 
 ```bash
 # 1. Verificar estado del contenedor tutbot_service
@@ -117,14 +94,17 @@ docker image prune -f
 
 Si necesitas actualizar o reiniciar `tut_bot` sin afectar al trading bot:
 ```bash
-cd /home/lvant/Documents/proyecto_b
+cd /home/lvant/Documents/tut_bot
+
+# Actualizar a la última versión de código
+git pull origin main
+
+# Reconstruir tras cambios
+docker-compose up -d --build
 
 # Reiniciar tut_bot
 docker-compose restart
 
 # Detener tut_bot de forma limpia
 docker-compose down
-
-# Reconstruir tras cambios
-docker-compose up -d --build
 ```

@@ -6,7 +6,7 @@
 param (
     [string]$JetsonHost = "192.168.10.10",
     [string]$JetsonUser = "lvant",
-    [string]$RemoteDir  = "/home/lvant/Documents/proyecto_b"
+    [string]$RemoteDir  = "/home/lvant/Documents/tut_bot"
 )
 
 $ErrorActionPreference = "Stop"
