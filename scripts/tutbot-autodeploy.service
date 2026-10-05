@@ -1,0 +1,14 @@
+[Unit]
+Description=Auto Deploy Service - tut_bot (Proyecto B)
+After=network.target docker.service
+
+[Service]
+Type=simple
+User=lvant
+WorkingDirectory=/home/lvant/Documents/tut_bot
+ExecStart=/bin/bash /home/lvant/Documents/tut_bot/scripts/auto_deploy.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

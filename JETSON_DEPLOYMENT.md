@@ -92,7 +92,7 @@ docker image prune -f
 
 ## 5. Parada o Actualización Segura
 
-Si necesitas actualizar o reiniciar `tut_bot` sin afectar al trading bot:
+Si necesitas actualizar o reiniciar `tut_bot` manualmente:
 ```bash
 cd /home/lvant/Documents/tut_bot
 
@@ -108,3 +108,32 @@ docker-compose restart
 # Detener tut_bot de forma limpia
 docker-compose down
 ```
+
+---
+
+## 6. CI/CD Auto-Deploy Continuo (Daemon en systemd)
+
+Para que `tut_bot` se actualice automáticamente en la Jetson Nano ante cada `git push` a `main`:
+
+### 6.1. Flujo de CI (GitHub Actions)
+El archivo `.github/workflows/ci.yml` ejecuta en cada push:
+1. `ruff check` (linter)
+2. `pytest` (suite de 14 pruebas pedagógicas y de FSM)
+3. Verificación de compilación multi-arquitectura en Docker Buildx (`linux/amd64` y `linux/arm64`).
+
+### 6.2. Activar el Servicio de CD en la Jetson Nano
+Ejecuta este comando una sola vez en la Jetson:
+```bash
+cd /home/lvant/Documents/tut_bot
+sudo bash scripts/setup_autodeploy_service.sh
+```
+
+### 6.3. Monitoreo del Auto-Deploy
+```bash
+# Ver estado de ambos daemons a la vez (Trading Bot y tut_bot):
+systemctl status bot-autodeploy.service tutbot-autodeploy.service --no-pager
+
+# Ver logs del auto-deploy de tut_bot en tiempo real:
+sudo journalctl -u tutbot-autodeploy.service -f
+```
+
