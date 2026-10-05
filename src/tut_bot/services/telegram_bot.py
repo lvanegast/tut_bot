@@ -3,7 +3,7 @@ import logging
 import os
 import re
 import tempfile
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from telegram import (
     InlineKeyboardButton,
@@ -333,6 +333,18 @@ class TelegramCoachBot:
             f"👇 <b>Elige qué habilidad deseas practicar o cambia tu nivel:</b>"
         )
 
+        unlocked = state.get("unlocked_levels", ["A1"])
+        passed = state.get("passed_levels", [])
+        lang = state["language"]
+
+        def get_lvl_label(lvl: str) -> str:
+            if f"{lang}_{lvl}_{current_skill}" in passed:
+                return f"✅ {lvl} (Completado)"
+            elif lvl in unlocked:
+                return f"🔓 {lvl} (Desbloqueado)"
+            else:
+                return f"🔒 {lvl}"
+
         keyboard = [
             [
                 InlineKeyboardButton("🗣️ Hablar", callback_data="mode_speaking"),
@@ -340,9 +352,9 @@ class TelegramCoachBot:
                 InlineKeyboardButton("👂 Comprender", callback_data="mode_listening"),
             ],
             [
-                InlineKeyboardButton("🟢 A1 (Básico)", callback_data="level_A1"),
-                InlineKeyboardButton("🟡 A2 (Elemental)", callback_data="level_A2"),
-                InlineKeyboardButton("🔵 B1 (Intermedio)", callback_data="level_B1"),
+                InlineKeyboardButton(get_lvl_label("A1"), callback_data="level_A1"),
+                InlineKeyboardButton(get_lvl_label("A2"), callback_data="level_A2"),
+                InlineKeyboardButton(get_lvl_label("B1"), callback_data="level_B1"),
             ],
             [
                 InlineKeyboardButton("📚 Ir al Ejercicio", callback_data="btn_exercise"),
@@ -424,6 +436,66 @@ class TelegramCoachBot:
         user_id = f"tg_{update.effective_user.id}"
         await self._send_exercise_card(update, user_id)
 
+    async def _send_level_completed_card(
+        self,
+        update: Update,
+        user_id: str,
+        info: Dict[str, Any],
+        edit_message: bool = False,
+    ):
+        """Muestra la tarjeta de graduación de nivel CEFR y opciones de progresión."""
+        state = tracker.get_user_state(user_id)
+        lang = info.get("language") or state["language"]
+        level = info.get("level") or state.get("level", "A1")
+        skill = info.get("skill_mode") or state.get("skill_mode", "speaking")
+        next_level = info.get("next_level") or ("A2" if level == "A1" else ("B1" if level == "A2" else None))
+
+        lang_name = "🇩🇪 Alemán" if lang.startswith("de") else "🇺🇸 Inglés"
+        skill_names = {
+            "speaking": "🗣️ Hablar",
+            "writing": "✍️ Escribir",
+            "listening": "👂 Comprender",
+        }
+        skill_name = skill_names.get(skill, skill)
+
+        lines = [
+            "🏆 <b>¡FELICITACIONES! MÓDULO COMPLETADO</b> 🏆\n",
+            f"Has completado con éxito todos los ejercicios de <b>{skill_name}</b> en nivel <b>{level}</b> ({lang_name}).",
+            "🎉 <i>Tu logro ha sido registrado en tu historial de aprendizaje.</i>\n",
+        ]
+
+        keyboard = []
+        if next_level:
+            lines.append(f"🚀 <b>¡Has desbloqueado el nivel {next_level}!</b>")
+            lines.append(f"Puedes ascender ahora a {next_level} o continuar consolidando otras habilidades.")
+            keyboard.append([
+                InlineKeyboardButton(f"🚀 Ascender a Nivel {next_level}", callback_data=f"fsm_ascend_{next_level}")
+            ])
+        else:
+            lines.append("🌟 <b>¡Has alcanzado el nivel máximo disponible en este curso!</b>")
+
+        keyboard.extend([
+            [
+                InlineKeyboardButton("🔄 Repasar este Nivel", callback_data=f"fsm_review_{level}"),
+                InlineKeyboardButton("🎯 Cambiar Habilidad", callback_data="btn_mode_menu"),
+            ],
+            [
+                InlineKeyboardButton("📊 Mis Estadísticas", callback_data="btn_stats"),
+                InlineKeyboardButton("🏠 Menú Principal", callback_data="btn_start_menu"),
+            ],
+        ])
+
+        msg_text = "\n".join(lines)
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        if edit_message and update.callback_query:
+            try:
+                await self._safe_edit_text(update.callback_query, msg_text, reply_markup=reply_markup)
+            except Exception:
+                await self._safe_send_chat_message(update.effective_chat, msg_text, reply_markup=reply_markup)
+        else:
+            await self._safe_send_chat_message(update.effective_chat, msg_text, reply_markup=reply_markup)
+
     async def _send_exercise_card(self, update: Update, user_id: str, edit_message: bool = False):
         """Envía o actualiza la tarjeta del ejercicio según la modalidad activa (Hablar, Escribir, Comprender)."""
         state = tracker.get_user_state(user_id)
@@ -445,7 +517,22 @@ class TelegramCoachBot:
                 await self._safe_reply_text(update.effective_message, msg)
             return
 
-        idx = state["exercise_index"] % len(exercises)
+        fsm_state = state.get("fsm_state", "IN_EXERCISE")
+        idx = state.get("exercise_index", 0)
+
+        # Si el usuario ya completó el nivel, mostrar tarjeta de graduación en lugar de ciclar
+        if fsm_state == "LEVEL_COMPLETED" or idx >= len(exercises):
+            advance_info = {
+                "language": lang,
+                "level": level,
+                "skill_mode": skill_mode,
+                "next_level": "A2" if level == "A1" else ("B1" if level == "A2" else None),
+            }
+            await self._send_level_completed_card(
+                update, user_id, advance_info, edit_message=edit_message
+            )
+            return
+
         ex = exercises[idx]
 
         tracker.set_user_custom_phrase(user_id, None)
@@ -716,9 +803,28 @@ class TelegramCoachBot:
 
         elif data.startswith("level_"):
             new_level = data.replace("level_", "")
+            state = tracker.get_user_state(user_id)
+            unlocked = state.get("unlocked_levels", ["A1"])
+            if new_level not in unlocked:
+                await query.answer(
+                    f"🔒 El nivel {new_level} está bloqueado. Completa los niveles previos para desbloquearlo.",
+                    show_alert=True,
+                )
+                return
             tracker.set_user_level(user_id, new_level)
             await self._safe_edit_text(
                 query, f"✅ Nivel de dificultad cambiado a: <b>{new_level}</b>."
+            )
+            await self._send_exercise_card(update, user_id, edit_message=False)
+
+        elif data.startswith("fsm_review_"):
+            target_level = data.replace("fsm_review_", "")
+            tracker.set_user_level(user_id, target_level)
+            tracker.set_user_exercise_index(user_id, 0)
+            tracker.set_fsm_state(user_id, "IN_EXERCISE")
+            await self._safe_edit_text(
+                query,
+                f"🔄 <b>Reiniciando repaso del nivel {target_level}...</b>\n¡A darlo todo!",
             )
             await self._send_exercise_card(update, user_id, edit_message=False)
 
@@ -783,6 +889,7 @@ class TelegramCoachBot:
             )
 
             if is_correct:
+                tracker.mark_exercise_completed(user_id, ex.id)
                 res_msg = (
                     f"🟢 <b>¡Correcto!</b> 🎉\n\n"
                     f'Seleccionaste: <i>"{chosen_str}"</i>\n'
@@ -831,9 +938,15 @@ class TelegramCoachBot:
             )
             if not exercises:
                 exercises = get_exercises(language=state["language"])
-            next_idx = (state["exercise_index"] + 1) % len(exercises)
-            tracker.set_user_exercise_index(user_id, next_idx)
-            await self._send_exercise_card(update, user_id, edit_message=True)
+
+            advance_info = tracker.advance_exercise_fsm(user_id, len(exercises))
+            if advance_info["status"] == "next_exercise":
+                await self._send_exercise_card(update, user_id, edit_message=True)
+            else:
+                # Transición formal de la FSM a LEVEL_COMPLETED
+                await self._send_level_completed_card(
+                    update, user_id, advance_info, edit_message=True
+                )
 
         elif data == "ex_prev":
             state = tracker.get_user_state(user_id)
@@ -844,9 +957,22 @@ class TelegramCoachBot:
             )
             if not exercises:
                 exercises = get_exercises(language=state["language"])
-            prev_idx = (state["exercise_index"] - 1 + len(exercises)) % len(exercises)
+            prev_idx = max(0, state["exercise_index"] - 1)
             tracker.set_user_exercise_index(user_id, prev_idx)
+            tracker.set_fsm_state(user_id, "IN_EXERCISE")
             await self._send_exercise_card(update, user_id, edit_message=True)
+
+        elif data.startswith("fsm_ascend_"):
+            target_level = data.replace("fsm_ascend_", "")
+            tracker.unlock_level(user_id, target_level)
+            tracker.set_user_level(user_id, target_level)
+            tracker.set_user_exercise_index(user_id, 0)
+            tracker.set_fsm_state(user_id, "IN_EXERCISE")
+            await self._safe_edit_text(
+                query,
+                f"🚀 <b>¡Ascenso al Nivel {target_level} completado!</b>\nIniciando tu nuevo programa de entrenamiento.",
+            )
+            await self._send_exercise_card(update, user_id, edit_message=False)
 
         elif data.startswith("tts_slow_"):
             await self._send_tts_reference(query, user_id, data, slow=True)
@@ -980,6 +1106,9 @@ class TelegramCoachBot:
                 level=ex.level,
             )
 
+            if eval_res.is_correct or eval_res.score >= 60:
+                tracker.mark_exercise_completed(user_id, ex.id)
+
             badge = (
                 "🟢 <b>¡Excelente trabajo!</b> 🎉"
                 if eval_res.is_correct
@@ -1089,6 +1218,7 @@ class TelegramCoachBot:
                 )
 
                 if is_correct:
+                    tracker.mark_exercise_completed(user_id, ex.id)
                     res_msg = (
                         f"🟢 <b>¡Correcto!</b> 🎉\n\n"
                         f"Seleccionaste: <b>{selected_option_idx + 1}️⃣ {chosen_str}</b>\n"
@@ -1132,6 +1262,9 @@ class TelegramCoachBot:
                 language=lang,
                 options=ex.options,
             )
+
+            if comp_res.get("is_correct"):
+                tracker.mark_exercise_completed(user_id, ex.id)
 
             badge = (
                 "🟢 <b>¡Correcto!</b> 🎉" if comp_res.get("is_correct") else "🟡 <b>Atención</b> 🎧"
@@ -1252,6 +1385,9 @@ class TelegramCoachBot:
                 prosody_score=eval_result.prosody_score,
                 weak_phonemes=weak_phonemes,
             )
+
+            if not is_custom and eval_result.overall_score >= 60 and idx < len(exercises):
+                tracker.mark_exercise_completed(user_id, exercises[idx].id)
 
             # 6. Formatear reporte de Telegram
             score = eval_result.overall_score

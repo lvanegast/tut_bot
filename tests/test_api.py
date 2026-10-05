@@ -229,6 +229,55 @@ def test_telegram_bot_service():
     assert app is not None
 
 
+def test_fsm_progression_and_level_graduation():
+    from tut_bot.services.tracker import tracker
+
+    user_id = "test_fsm_user_flow"
+    tracker.set_user_language(user_id, "de-DE")
+    tracker.set_user_level(user_id, "A1")
+    tracker.set_user_skill_mode(user_id, "speaking")
+
+    # 1. Estado inicial
+    state = tracker.get_user_state(user_id)
+    assert state["fsm_state"] == "IN_EXERCISE"
+    assert state["exercise_index"] == 0
+    assert "A1" in state["unlocked_levels"]
+
+    # 2. Avance secuencial en el nivel (ej: total 3 ejercicios)
+    step1 = tracker.advance_exercise_fsm(user_id, total_exercises=3)
+    assert step1["status"] == "next_exercise"
+    assert step1["index"] == 1
+
+    step2 = tracker.advance_exercise_fsm(user_id, total_exercises=3)
+    assert step2["status"] == "next_exercise"
+    assert step2["index"] == 2
+
+    # 3. Al completar el último ejercicio, NO debe entrar en bucle infinito
+    step3 = tracker.advance_exercise_fsm(user_id, total_exercises=3)
+    assert step3["status"] == "level_completed"
+    assert step3["level"] == "A1"
+    assert step3["next_level"] == "A2"
+
+    state = tracker.get_user_state(user_id)
+    assert state["fsm_state"] == "LEVEL_COMPLETED"
+    assert "A2" in state["unlocked_levels"]
+    assert "de-DE_A1_speaking" in state["passed_levels"]
+
+    # 4. Probar graduación formal / ascenso al siguiente nivel CEFR
+    ascend_res = tracker.ascend_to_next_level(user_id)
+    assert ascend_res == "A2"
+
+    state = tracker.get_user_state(user_id)
+    assert state["level"] == "A2"
+    assert state["exercise_index"] == 0
+    assert state["fsm_state"] == "IN_EXERCISE"
+
+    # 5. Registro de ejercicios completados individualmente
+    tracker.mark_exercise_completed(user_id, "de_a1_spk_01")
+    state = tracker.get_user_state(user_id)
+    assert "de_a1_spk_01" in state["completed_exercises"]
+
+
 if __name__ == "__main__":
     test_health_endpoint()
     test_exercises_endpoints()
@@ -241,4 +290,5 @@ if __name__ == "__main__":
     test_exercises_skill_and_level_filtering()
     test_gemini_coach_multiskill()
     test_telegram_bot_service()
+    test_fsm_progression_and_level_graduation()
     print("\n[EXITO] Todas las pruebas unitarias pasaron correctamente!")
