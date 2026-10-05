@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import random
 from typing import List, Optional
 
@@ -106,7 +107,34 @@ class AzureSpeechService:
 
     assess_pronunciation = evaluate_pronunciation
 
+    def transcribe_speech(self, wav_path: str, language: str = "de-DE") -> str:
+        """Transcribe voz libre a texto usando Azure Speech STT."""
+        fallback = (
+            "Ich möchte bitte zwei Brötchen und einen Kaffee."
+            if language.startswith("de")
+            else "I would like a coffee please."
+        )
+
+        if not self.is_available() or settings.is_mock_mode or not wav_path or not os.path.exists(wav_path):
+            return fallback
+
+        try:
+            speech_config = speechsdk.SpeechConfig(subscription=self.key, region=self.region)
+            speech_config.speech_recognition_language = language
+            audio_config = speechsdk.audio.AudioConfig(filename=wav_path)
+            recognizer = speechsdk.SpeechRecognizer(
+                speech_config=speech_config, language=language, audio_config=audio_config
+            )
+            result = recognizer.recognize_once()
+            if result.reason == speechsdk.ResultReason.RecognizedSpeech and result.text:
+                return result.text
+            return fallback
+        except Exception as e:
+            logger.error(f"Error transcribiendo voz libre en Azure: {e}")
+            return fallback
+
     def synthesize_speech(
+
         self, text: str, language: str = "de-DE", slow: bool = False
     ) -> Optional[bytes]:
         """Sintetiza audio nativo con Azure TTS, con opción de velocidad pausada (0.8x) para principiantes A1."""

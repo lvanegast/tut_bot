@@ -25,8 +25,12 @@ from tut_bot.config import settings
 from tut_bot.services.audio_converter import audio_converter
 from tut_bot.services.azure_speech import azure_service
 from tut_bot.services.curriculum import (
+    ScenarioInfo,
     extract_words_from_text,
+    get_curriculum_scenarios,
     get_curriculum_units,
+    get_scenario_by_id,
+    get_scenarios_for_unit,
     get_unit_by_id,
 )
 from tut_bot.services.exercises import get_exercises
@@ -197,6 +201,12 @@ class TelegramCoachBot:
         app.add_handler(CommandHandler(["idioma", "lang", "language"], self.cmd_language))
         app.add_handler(CommandHandler(["modo", "skill", "habilidad"], self.cmd_mode))
         app.add_handler(CommandHandler(["nivel", "level"], self.cmd_level))
+        app.add_handler(
+            CommandHandler(
+                ["conversar", "dialogo", "mision", "roleplay", "chat"],
+                self.cmd_conversation,
+            )
+        )
         app.add_handler(CommandHandler(["palabra", "vocabulario", "definir"], self.cmd_vocab))
         app.add_handler(
             CommandHandler(
@@ -272,6 +282,7 @@ class TelegramCoachBot:
             "speaking": "🗣️ Hablar",
             "writing": "✍️ Escribir",
             "listening": "👂 Comprender",
+            "conversation": "💬 Conversar",
         }
         current_skill = skill_names.get(state.get("skill_mode", "speaking"), "🗣️ Hablar")
         current_level = state.get("level", "A1")
@@ -279,10 +290,11 @@ class TelegramCoachBot:
         welcome_text = (
             "🎙️ <b>¡Bienvenido a tut_bot!</b>\n"
             "Tu tutor integral inteligente para <b>Alemán</b> e <b>Inglés</b> con <b>Azure Speech (IPA)</b> y <b>Google Gemini</b>.\n\n"
-            "🎯 <b>3 Habilidades de Aprendizaje:</b>\n"
+            "🎯 <b>4 Habilidades de Aprendizaje:</b>\n"
             "• 🗣️ <b>Hablar:</b> Diagnóstico acústico de fonemas con notas de voz.\n"
             "• ✍️ <b>Escribir:</b> Redacción, declinaciones y corrección gramatical inmediata.\n"
-            "• 👂 <b>Comprender:</b> Audición nativa, responder preguntas y aprender vocabulario.\n\n"
+            "• 👂 <b>Comprender:</b> Audición nativa, responder preguntas y aprender vocabulario.\n"
+            "• 💬 <b>Conversar:</b> Misiones de rol inmersivas con personajes nativos IA por unidad temática.\n\n"
             f"🌐 <b>Idioma:</b> {lang_flag} | <b>Nivel:</b> {current_level} | <b>Modo:</b> {current_skill}\n\n"
             "💡 <i>¿Tienes duda con una palabra? Escribe <code>/palabra término</code> en cualquier momento.</i>"
         )
@@ -291,6 +303,10 @@ class TelegramCoachBot:
             [
                 InlineKeyboardButton("🎯 Modo y Nivel", callback_data="btn_mode_menu"),
                 InlineKeyboardButton("📚 Ir al Ejercicio", callback_data="btn_exercise"),
+            ],
+            [
+                InlineKeyboardButton("💬 Misión de Diálogo", callback_data="mode_conversation"),
+                InlineKeyboardButton("📂 Unidades", callback_data="btn_units_menu"),
             ],
             [
                 InlineKeyboardButton("🇩🇪 Alemán", callback_data="lang_de"),
@@ -311,7 +327,9 @@ class TelegramCoachBot:
         help_text = (
             "📖 <b>Comandos disponibles en tut_bot:</b>\n\n"
             "• <b>/ejercicio</b> — Muestra el ejercicio activo según tu modo y nivel.\n"
-            "• <b>/modo</b> — Cambia entre 🗣️ Hablar, ✍️ Escribir y 👂 Comprender.\n"
+            "• <b>/conversar</b> — Inicia una misión de diálogo conversacional (roleplay con IA).\n"
+            "• <b>/modo</b> — Cambia entre 🗣️ Hablar, ✍️ Escribir, 👂 Comprender y 💬 Conversar.\n"
+            "• <b>/tema</b> — Selecciona una de las 6 Unidades Temáticas oficiales (~650 palabras).\n"
             "• <b>/nivel</b> — Elige tu nivel MCER (A1, A2, B1).\n"
             "• <b>/palabra &lt;término&gt;</b> — Consulta el significado, género o ejemplos de cualquier palabra.\n"
             "• <b>/idioma</b> — Alterna entre Alemán (de-DE) e Inglés (en-US).\n"
@@ -335,6 +353,7 @@ class TelegramCoachBot:
             "speaking": "🗣️ Hablar (Pronunciación IPA)",
             "writing": "✍️ Escribir (Gramática y Traducción)",
             "listening": "👂 Comprender (Audición y Vocabulario)",
+            "conversation": "💬 Conversar (IA Roleplay guiado)",
         }
 
         unit_label = "🌐 Todas las Unidades"
@@ -367,7 +386,10 @@ class TelegramCoachBot:
             [
                 InlineKeyboardButton("🗣️ Hablar", callback_data="mode_speaking"),
                 InlineKeyboardButton("✍️ Escribir", callback_data="mode_writing"),
+            ],
+            [
                 InlineKeyboardButton("👂 Comprender", callback_data="mode_listening"),
+                InlineKeyboardButton("💬 Conversar (IA)", callback_data="mode_conversation"),
             ],
             [
                 InlineKeyboardButton(get_lvl_label("A1"), callback_data="level_A1"),
@@ -560,16 +582,394 @@ class TelegramCoachBot:
                 await self._safe_edit_text(update.callback_query, msg_text, reply_markup=reply_markup)
             except Exception:
                 await self._safe_send_chat_message(update.effective_chat, msg_text, reply_markup=reply_markup)
+    async def cmd_conversation(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Inicia o retoma una misión de conversación interactiva (roleplay con IA)."""
+        user_id = f"tg_{update.effective_user.id}"
+        tracker.set_user_skill_mode(user_id, "conversation")
+        await self._send_conversation_mission_card(update, user_id)
+
+    async def _send_conversation_mission_card(
+        self,
+        update: Update,
+        user_id: str,
+        edit_message: bool = False,
+    ):
+        """Muestra la tarjeta de misión de roleplay conversacional para la unidad activa."""
+        state = tracker.get_user_state(user_id)
+        lang = state["language"]
+        level = state.get("level", "A1")
+        active_unit = state.get("active_unit", "all")
+
+        scenarios = get_scenarios_for_unit(active_unit, lang, level)
+        if not scenarios:
+            scenarios = get_curriculum_scenarios(lang, level)
+        scen = scenarios[0]
+
+        # Verificar si ya hay una conversación activa para este usuario
+        active_conv = tracker.get_active_conversation(user_id)
+        if not active_conv or active_conv.get("scenario_id") != scen.id:
+            active_conv = tracker.start_conversation(
+                user_id=user_id,
+                language=lang,
+                level=level,
+                unit_id=scen.unit_id,
+                scenario_id=scen.id,
+                scenario_title=scen.title,
+                mission_brief=scen.mission_brief,
+                character_name=scen.character_name,
+                initial_greeting=scen.initial_greeting,
+                initial_greeting_es=scen.initial_greeting_es,
+            )
+
+        turns = active_conv.get("turns", [])
+        last_turn = (
+            turns[-1]
+            if turns
+            else {
+                "name": scen.character_name,
+                "text": scen.initial_greeting,
+                "text_es": scen.initial_greeting_es,
+            }
+        )
+
+        # Frases de apoyo sugeridas
+        hints = [f"• <i>{p}</i>" for p in scen.target_phrases[:3]]
+        hints_str = "\n".join(hints)
+
+        # Diálogo reciente (últimos 4 turnos)
+        dialogue_preview = []
+        for t in turns[-4:]:
+            icon = "👤" if t.get("role") == "character" else "🎓"
+            dialogue_preview.append(f"{icon} <b>{t.get('name')}:</b> {t.get('text')}")
+        dialogue_text = "\n".join(dialogue_preview)
+
+        spoiler_es = (
+            f"<tg-spoiler><i>🇪🇸 {last_turn.get('text_es', '')}</i></tg-spoiler>"
+            if last_turn.get("text_es")
+            else ""
+        )
+
+        lang_badge = "🇩🇪 ALEMÁN" if lang.startswith("de") else "🇺🇸 INGLÉS"
+        u_info = get_unit_by_id(scen.unit_id, lang, level)
+        u_badge = f" · {u_info.icon} U{u_info.number}" if u_info else ""
+
+        card = (
+            f"🎭 <b>{lang_badge} [{level}{u_badge}] — Misión de Conversación</b>\n"
+            f"<b>Escenario:</b> {scen.title}\n"
+            f"👤 <b>Interlocutor:</b> {scen.character_name} (<i>{scen.character_role}</i>)\n"
+            f"🎯 <b>Tu Misión:</b> {scen.mission_brief}\n\n"
+            f"💡 <b>Frases de apoyo sugeridas:</b>\n{hints_str}\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"💬 <b>Diálogo en curso:</b>\n"
+            f"{dialogue_text}\n"
+            f"{spoiler_es}\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"🎙️ Envía una <b>nota de voz</b> o responde por <b>texto</b> para continuar."
+        )
+
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "🔊 Escuchar al Personaje", callback_data=f"conv_tts_{scen.id}"
+                ),
+                InlineKeyboardButton(
+                    "🐢 Escuchar Lento", callback_data=f"conv_tts_slow_{scen.id}"
+                ),
+            ],
+            [
+                InlineKeyboardButton("🏁 Finalizar Misión", callback_data="conv_finish"),
+                InlineKeyboardButton("🔄 Reiniciar Misión", callback_data="conv_restart"),
+            ],
+            [
+                InlineKeyboardButton("📂 Cambiar Unidad", callback_data="btn_units_menu"),
+                InlineKeyboardButton("🎯 Cambiar Modo", callback_data="btn_mode_menu"),
+            ],
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        if edit_message and update.callback_query:
+            try:
+                await self._safe_edit_text(update.callback_query, card, reply_markup=reply_markup)
+            except Exception:
+                await self._safe_send_chat_message(
+                    update.effective_chat, card, reply_markup=reply_markup
+                )
         else:
-            await self._safe_send_chat_message(update.effective_chat, msg_text, reply_markup=reply_markup)
+            await self._safe_send_chat_message(
+                update.effective_chat, card, reply_markup=reply_markup
+            )
+
+    async def _handle_conversation_turn(
+        self,
+        update: Update,
+        user_id: str,
+        user_text: str,
+        is_audio: bool = False,
+    ):
+        """Procesa una intervención del alumno en el diálogo de roleplay."""
+        state = tracker.get_user_state(user_id)
+        lang = state["language"]
+        level = state.get("level", "A1")
+        active_conv = tracker.get_active_conversation(user_id)
+        if not active_conv:
+            await self._send_conversation_mission_card(update, user_id)
+            return
+
+        scenario_id = active_conv["scenario_id"]
+        scen = get_scenario_by_id(scenario_id, lang, level)
+        if not scen:
+            scenarios = get_curriculum_scenarios(lang, level)
+            scen = scenarios[0]
+
+        # 1. Registrar turno del alumno
+        tracker.append_conversation_turn(
+            user_id=user_id,
+            role="user",
+            text=user_text,
+            name="Alumno",
+        )
+
+        # 2. Registrar palabras del vocabulario A1 dominadas por el alumno
+        words = extract_words_from_text(user_text)
+        tracker.record_mastered_words(user_id, lang, words, level=level)
+
+        # 3. Consultar respuesta a Gemini Coach
+        await update.effective_message.reply_chat_action(ChatAction.TYPING)
+        active_conv = tracker.get_active_conversation(user_id)
+        dialogue_history = active_conv.get("turns", [])
+
+        reply_data = gemini_coach.generate_conversation_reply(
+            scenario_title=scen.title,
+            character_name=scen.character_name,
+            character_role=scen.character_role,
+            mission_brief=scen.mission_brief,
+            target_phrases=scen.target_phrases,
+            dialogue_history=dialogue_history,
+            user_message=user_text,
+            language=lang,
+        )
+
+        # 4. Registrar turno del personaje
+        char_reply = reply_data.get("reply_native", "")
+        char_es = reply_data.get("reply_es", "")
+        tracker.append_conversation_turn(
+            user_id=user_id,
+            role="character",
+            text=char_reply,
+            text_es=char_es,
+            name=scen.character_name,
+        )
+
+        # 5. Formatear la réplica
+        feedback_tip = reply_data.get("feedback_tip")
+        tip_str = f"\n💡 <i>Consejo: {feedback_tip}</i>\n" if feedback_tip else ""
+
+        user_turn_count = sum(1 for t in dialogue_history if t.get("role") == "user") + 1
+
+        msg = (
+            f"👤 <b>{scen.character_name}:</b>\n"
+            f'"{char_reply}"\n'
+            f"<tg-spoiler><i>🇪🇸 {char_es}</i></tg-spoiler>\n"
+            f"{tip_str}\n"
+            f"<i>(Intercambio {user_turn_count})</i>"
+        )
+
+        is_completed = (
+            reply_data.get("mission_status") == "goal_achieved"
+            or user_turn_count >= 5
+        )
+
+        if is_completed:
+            await self._safe_reply_text(update.effective_message, msg)
+            await self._finish_conversation_mission(update, user_id, scen)
+            return
+
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "🔊 Escuchar al Personaje",
+                    callback_data=f"conv_tts_rep_{user_turn_count}",
+                ),
+                InlineKeyboardButton(
+                    "🐢 Escuchar Lento",
+                    callback_data=f"conv_tts_slowrep_{user_turn_count}",
+                ),
+            ],
+            [
+                InlineKeyboardButton("🏁 Concluir Misión", callback_data="conv_finish"),
+                InlineKeyboardButton("🔄 Reiniciar", callback_data="conv_restart"),
+            ],
+            [
+                InlineKeyboardButton("🎯 Cambiar Modo", callback_data="btn_mode_menu"),
+            ],
+        ]
+        await self._safe_reply_text(
+            update.effective_message,
+            msg,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+
+    async def _finish_conversation_mission(
+        self,
+        update: Update,
+        user_id: str,
+        scen: Optional[ScenarioInfo] = None,
+    ):
+        """Concluye formalmente la conversación, guarda estadísticas y muestra el debriefing con FSM."""
+        active_conv = tracker.get_active_conversation(user_id)
+        if not active_conv:
+            await self._safe_reply_text(
+                update.effective_message,
+                "ℹ️ No hay ninguna misión de conversación activa en este momento.",
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [
+                            InlineKeyboardButton(
+                                "🎭 Nueva Misión", callback_data="mode_conversation"
+                            )
+                        ],
+                        [
+                            InlineKeyboardButton(
+                                "📚 Ir a Ejercicios", callback_data="btn_exercise"
+                            )
+                        ],
+                    ]
+                ),
+            )
+            return
+
+        state = tracker.get_user_state(user_id)
+        lang = state["language"]
+        level = state.get("level", "A1")
+
+        if not scen:
+            scen = get_scenario_by_id(active_conv["scenario_id"], lang, level)
+            if not scen:
+                scenarios = get_curriculum_scenarios(lang, level)
+                scen = scenarios[0]
+
+        dialogue_history = active_conv.get("turns", [])
+        tracker.complete_conversation(user_id)
+
+        await update.effective_message.reply_chat_action(ChatAction.TYPING)
+        debrief = gemini_coach.generate_conversation_debrief(
+            scenario_title=scen.title,
+            character_name=scen.character_name,
+            mission_brief=scen.mission_brief,
+            dialogue_history=dialogue_history,
+            language=lang,
+        )
+
+        score = debrief.get("score", 85.0)
+        badge = (
+            "🏆 <b>¡MISIÓN CUMPLIDA CON ÉXITO!</b> 🏆"
+            if debrief.get("passed", True)
+            else "🟡 <b>MISIÓN FINALIZADA</b>"
+        )
+        summary = debrief.get("summary", "")
+        tips = debrief.get("tips", "")
+
+        strengths = debrief.get("strengths", [])
+        str_lines = (
+            "\n".join([f"• ✅ {s}" for s in strengths])
+            if strengths
+            else "• Buena participación"
+        )
+
+        areas = debrief.get("areas_to_improve", [])
+        area_lines = (
+            "\n".join([f"• 🎯 {a}" for a in areas])
+            if areas
+            else "• Continuar practicando"
+        )
+
+        msg = (
+            f"{badge}\n\n"
+            f"<b>Escenario:</b> {scen.title}\n"
+            f"<b>Puntuación de Desempeño:</b> <code>{score:.0f}/100</code>\n\n"
+            f"📝 <b>Evaluación Pedagógica:</b>\n{summary}\n\n"
+            f"💪 <b>Puntos Fuertes:</b>\n{str_lines}\n\n"
+            f"🌱 <b>Para Seguir Mejorando:</b>\n{area_lines}\n\n"
+            f"💡 <b>Consejo del Tutor:</b>\n<i>{tips}</i>"
+        )
+
+        keyboard = [
+            [
+                InlineKeyboardButton("🔄 Repetir Misión", callback_data="conv_restart"),
+                InlineKeyboardButton(
+                    "🎭 Siguiente Escenario", callback_data="conv_next_scenario"
+                ),
+            ],
+            [
+                InlineKeyboardButton("📚 Ir a Ejercicios", callback_data="btn_exercise"),
+                InlineKeyboardButton("📊 Mis Estadísticas", callback_data="btn_stats"),
+            ],
+        ]
+
+        if update.callback_query:
+            try:
+                await self._safe_edit_text(
+                    update.callback_query, msg, reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+            except Exception:
+                await self._safe_send_chat_message(
+                    update.effective_chat, msg, reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+        else:
+            await self._safe_reply_text(
+                update.effective_message, msg, reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+
+    async def _send_conversation_tts(self, query, user_id: str, slow: bool = False):
+        """Sintetiza la réplica más reciente del personaje de conversación y la envía como audio."""
+        state = tracker.get_user_state(user_id)
+        lang = state["language"]
+        active_conv = tracker.get_active_conversation(user_id)
+        if not active_conv:
+            await query.message.reply_text("⚠️ No hay misión de conversación activa.")
+            return
+
+        turns = active_conv.get("turns", [])
+        char_turns = [t for t in turns if t.get("role") == "character"]
+        text_to_speak = (
+            char_turns[-1].get("text")
+            if char_turns
+            else active_conv.get("initial_greeting", "Hallo")
+        )
+
+        wav_bytes = azure_service.text_to_speech(text=text_to_speak, language=lang, slow=slow)
+        if not wav_bytes:
+            await query.message.reply_text("⚠️ No se pudo generar el audio nativo de referencia.")
+            return
+
+        ogg_bytes = audio_converter.wav_to_ogg_opus(wav_bytes)
+        audio_stream = io.BytesIO(ogg_bytes if ogg_bytes else wav_bytes)
+        audio_stream.name = "dialogo_lento.ogg" if slow else "dialogo_nativo.ogg"
+
+        caption_flag = "🇩🇪" if lang.startswith("de") else "🇺🇸"
+        icon = "🐢" if slow else "🔊"
+        label = (
+            f"{icon} <b>Interlocutor ({active_conv.get('character_name', 'Personaje')} - 0.8x {caption_flag}):</b>"
+            if slow
+            else f"{icon} <b>Interlocutor ({active_conv.get('character_name', 'Personaje')} - {caption_flag}):</b>"
+        )
+        await query.message.reply_voice(
+            voice=audio_stream,
+            caption=f'{label}\n"{text_to_speak}"',
+            parse_mode=ParseMode.HTML,
+        )
 
     async def _send_exercise_card(self, update: Update, user_id: str, edit_message: bool = False):
-        """Envía o actualiza la tarjeta del ejercicio según la modalidad activa (Hablar, Escribir, Comprender)."""
+        """Envía o actualiza la tarjeta del ejercicio según la modalidad activa (Hablar, Escribir, Comprender, Conversar)."""
         state = tracker.get_user_state(user_id)
         lang = state["language"]
         skill_mode = state.get("skill_mode", "speaking")
         level = state.get("level", "A1")
         active_unit = state.get("active_unit", "all")
+
+        if skill_mode == "conversation":
+            await self._send_conversation_mission_card(update, user_id, edit_message=edit_message)
+            return
 
         exercises = get_exercises(
             language=lang, level=level, skill_type=skill_mode, unit_id=active_unit
@@ -915,12 +1315,41 @@ class TelegramCoachBot:
                 "speaking": "🗣️ Hablar (Pronunciación)",
                 "writing": "✍️ Escribir (Gramática y Traducción)",
                 "listening": "👂 Comprender (Audición y Vocabulario)",
+                "conversation": "💬 Conversar (IA Roleplay)",
             }
             await self._safe_edit_text(
                 query,
                 f"✅ Modo de entrenamiento cambiado a: <b>{skill_names.get(new_mode, new_mode)}</b>.",
             )
-            await self._send_exercise_card(update, user_id, edit_message=False)
+            if new_mode == "conversation":
+                await self._send_conversation_mission_card(update, user_id, edit_message=False)
+            else:
+                await self._send_exercise_card(update, user_id, edit_message=False)
+
+        elif data == "conv_finish":
+            await self._finish_conversation_mission(update, user_id)
+
+        elif data == "conv_restart":
+            tracker.cancel_conversation(user_id)
+            await self._safe_edit_text(query, "🔄 <b>Reiniciando misión conversacional...</b>")
+            await self._send_conversation_mission_card(update, user_id, edit_message=False)
+
+        elif data == "conv_next_scenario":
+            tracker.cancel_conversation(user_id)
+            state = tracker.get_user_state(user_id)
+            units = get_curriculum_units(state["language"], state.get("level", "A1"))
+            curr_u = state.get("active_unit", "all")
+            next_u = "unit_1"
+            for idx, u in enumerate(units):
+                if u.id == curr_u:
+                    next_u = units[(idx + 1) % len(units)].id
+                    break
+            tracker.set_user_unit(user_id, next_u)
+            await self._send_conversation_mission_card(update, user_id, edit_message=False)
+
+        elif data.startswith("conv_tts_"):
+            slow = "slow" in data
+            await self._send_conversation_tts(query, user_id, slow=slow)
 
         elif data.startswith("level_"):
             new_level = data.replace("level_", "")
@@ -1213,6 +1642,11 @@ class TelegramCoachBot:
             )
             return
 
+        # 1.5 Modo CONVERSACIÓN: Interacción de roleplay
+        if skill_mode == "conversation" or state.get("fsm_state") == "IN_CONVERSATION":
+            await self._handle_conversation_turn(update, user_id, user_text=text, is_audio=False)
+            return
+
         # 2. Modo ESCRITURA: Evaluar la respuesta del alumno
         if skill_mode == "writing":
             exercises = get_exercises(language=lang, level=level, skill_type="writing")
@@ -1448,6 +1882,59 @@ class TelegramCoachBot:
         user_id = f"tg_{update.effective_user.id}"
         state = tracker.get_user_state(user_id)
         lang = state["language"]
+        skill_mode = state.get("skill_mode", "speaking")
+
+        # 0. Si el usuario está en modo CONVERSACIÓN
+        if skill_mode == "conversation" or state.get("fsm_state") == "IN_CONVERSATION":
+            status_msg = await update.message.reply_text(
+                "🎙️ <b>Transcribiendo tu audio y consultando con tu interlocutor...</b>",
+                parse_mode=ParseMode.HTML,
+            )
+            await update.message.reply_chat_action(ChatAction.TYPING)
+            temp_wav_path = None
+            try:
+                voice_obj = update.message.voice or update.message.audio
+                if not voice_obj:
+                    return
+                voice_file = await voice_obj.get_file()
+                ogg_bytes = await voice_file.download_as_bytearray()
+                wav_bytes = audio_converter.ogg_to_wav(bytes(ogg_bytes))
+                if not wav_bytes:
+                    await self._safe_edit_text(
+                        status_msg,
+                        "❌ No se pudo procesar el formato del archivo de voz. Por favor intenta de nuevo.",
+                    )
+                    return
+
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                    f.write(wav_bytes)
+                    temp_wav_path = f.name
+
+                transcription = azure_service.transcribe_speech(temp_wav_path, language=lang)
+                if not transcription:
+                    transcription = "Hallo" if lang.startswith("de") else "Hello"
+
+                await self._safe_edit_text(
+                    status_msg,
+                    f'🗣️ <b>Dijiste:</b> <i>"{transcription}"</i>\n'
+                    "<i>Procesando respuesta del personaje...</i>",
+                )
+                await self._handle_conversation_turn(
+                    update, user_id, user_text=transcription, is_audio=True
+                )
+            except Exception as e:
+                logger.error(f"Error procesando voz en conversación: {e}", exc_info=True)
+                await self._safe_edit_text(
+                    status_msg,
+                    f"⚠️ Ocurrió un error procesando tu audio: {str(e)}",
+                )
+            finally:
+                if temp_wav_path and os.path.exists(temp_wav_path):
+                    try:
+                        os.remove(temp_wav_path)
+                    except Exception:
+                        pass
+            return
 
         if state.get("custom_phrase"):
             reference_text = state["custom_phrase"]

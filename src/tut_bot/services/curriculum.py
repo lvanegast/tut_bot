@@ -366,3 +366,211 @@ def match_known_words(candidate_words: List[str], language: str, level: str = "A
         if w_clean in target_set:
             matched.append(w_clean)
     return matched
+
+
+# =========================================================================
+# 3. ESCENARIOS OFICIALES DE CONVERSACIÓN (ROLEPLAY CON IA)
+# =========================================================================
+
+@dataclass
+class ScenarioInfo:
+    id: str
+    unit_id: str
+    level: str
+    language: str
+    title: str
+    character_name: str
+    character_role: str
+    mission_brief: str
+    initial_greeting: str
+    initial_greeting_es: str
+    target_phrases: List[str] = field(default_factory=list)
+
+
+GERMAN_A1_SCENARIOS: List[ScenarioInfo] = [
+    ScenarioInfo(
+        id="scen_de_u1",
+        unit_id="unit_1",
+        level="A1",
+        language="de-DE",
+        title="👋 Primer día en el curso de alemán",
+        character_name="Frau Müller",
+        character_role="Profesora de alemán en el Sprachinstitut en Berlín",
+        mission_brief="Saluda formalmente a la profesora, dile tu nombre, de qué país vienes y deletrea tu apellido.",
+        initial_greeting="Guten Tag! Herzlich willkommen im Sprachkurs. Wie heißen Sie?",
+        initial_greeting_es="¡Buenas tardes! Bienvenido/a al curso de idiomas. ¿Cómo se llama usted?",
+        target_phrases=["Ich heiße...", "Ich komme aus...", "Mein Vorname ist...", "Auf Wiedersehen"],
+    ),
+    ScenarioInfo(
+        id="scen_de_u2",
+        unit_id="unit_2",
+        level="A1",
+        language="de-DE",
+        title="☕ En la Panadería y Cafetería",
+        character_name="Herr Schmidt",
+        character_role="Panadero tradicional en 'Bäckerei Schmidt' en Múnich",
+        mission_brief="Pide dos panecillos ('zwei Brötchen') y un café solo, pregunta el precio ('Wie viel kostet das?') y paga.",
+        initial_greeting="Guten Morgen! Was darf es denn sein?",
+        initial_greeting_es="¡Buenos días! ¿Qué va a ser para usted?",
+        target_phrases=["Ich möchte...", "Ein Kaffee bitte", "Wie viel kostet das?", "Danke schön"],
+    ),
+    ScenarioInfo(
+        id="scen_de_u3",
+        unit_id="unit_3",
+        level="A1",
+        language="de-DE",
+        title="👨‍👩‍👧 Conociendo a un nuevo compañero",
+        character_name="Lukas",
+        character_role="Estudiante universitario alemán en una cafetería",
+        mission_brief="Conversa con Lukas. Cuéntale si tienes hermanos o si tus padres viven contigo y pregúntale su edad.",
+        initial_greeting="Hallo! Bist du auch neu hier? Erzähl mal, hast du Geschwister?",
+        initial_greeting_es="¡Hola! ¿Tú también eres nuevo aquí? Cuéntame, ¿tienes hermanos?",
+        target_phrases=["Ich habe einen Bruder", "Meine Eltern wohnen in...", "Wie alt bist du?"],
+    ),
+    ScenarioInfo(
+        id="scen_de_u4",
+        unit_id="unit_4",
+        level="A1",
+        language="de-DE",
+        title="⏰ Agendando una cita con un amigo",
+        character_name="Anna",
+        character_role="Tu amiga alemana organizando planes de fin de semana",
+        mission_brief="Acuerda con Anna el día y la hora exacta para encontrarse (ej: el sábado a las 15:00 horas).",
+        initial_greeting="Hallo! Hast du am Wochenende Zeit? Wann wollen wir uns treffen?",
+        initial_greeting_es="¡Hola! ¿Tienes tiempo el fin de semana? ¿A qué hora queremos encontrarnos?",
+        target_phrases=["Am Samstag um...", "Um wie viel Uhr?", "Ja, das passt mir gut!"],
+    ),
+    ScenarioInfo(
+        id="scen_de_u5",
+        unit_id="unit_5",
+        level="A1",
+        language="de-DE",
+        title="🚆 Pidiendo indicaciones en la estación",
+        character_name="Herr Weber",
+        character_role="Empleado del mostrador de información en la estación central (Hauptbahnhof)",
+        mission_brief="Pregunta con educación cómo llegar a la parada de autobús o a qué andén llega el tren.",
+        initial_greeting="Guten Tag! Informationsschalter Hauptbahnhof. Wie kann ich Ihnen helfen?",
+        initial_greeting_es="¡Buenas tardes! Mostrador de información de la estación central. ¿Cómo le puedo ayudar?",
+        target_phrases=["Entschuldigung, wo ist...?", "Auf welchem Gleis?", "Vielen Dank für die Hilfe"],
+    ),
+    ScenarioInfo(
+        id="scen_de_u6",
+        unit_id="unit_6",
+        level="A1",
+        language="de-DE",
+        title="🩺 En la Farmacia (Apotheke)",
+        character_name="Frau Wagner",
+        character_role="Farmacéutica en una botica céntrica",
+        mission_brief="Dile a la farmacéutica que tienes dolor de cabeza ('Kopfschmerzen') y pide algo para tomar.",
+        initial_greeting="Guten Tag! Was fehlt Ihnen denn? Wie kann ich helfen?",
+        initial_greeting_es="¡Buenas tardes! ¿Qué le ocurre? ¿Cómo le puedo ayudar?",
+        target_phrases=["Ich habe Kopfschmerzen", "Haben Sie Tabletten?", "Gute Besserung"],
+    ),
+]
+
+
+ENGLISH_A1_SCENARIOS: List[ScenarioInfo] = [
+    ScenarioInfo(
+        id="scen_en_u1",
+        unit_id="unit_1",
+        level="A1",
+        language="en-US",
+        title="👋 First Day at the Language School",
+        character_name="Ms. Miller",
+        character_role="English teacher at the language institute in London",
+        mission_brief="Greet the teacher politely, introduce yourself, say where you are from, and spell your name.",
+        initial_greeting="Good morning! Welcome to our English class. What is your name?",
+        initial_greeting_es="¡Buenos días! Bienvenido/a a nuestra clase de inglés. ¿Cuál es tu nombre?",
+        target_phrases=["My name is...", "I am from...", "Nice to meet you", "Goodbye"],
+    ),
+    ScenarioInfo(
+        id="scen_en_u2",
+        unit_id="unit_2",
+        level="A1",
+        language="en-US",
+        title="☕ At the London Coffee Shop",
+        character_name="Tom (Barista)",
+        character_role="Barista at a busy central cafe in London",
+        mission_brief="Order a black coffee and a croissant, ask how much it costs ('How much is it?') and pay.",
+        initial_greeting="Hello there! What can I get for you today?",
+        initial_greeting_es="¡Hola! ¿Qué te puedo servir hoy?",
+        target_phrases=["I would like a coffee", "How much is it?", "Keep the change", "Thank you"],
+    ),
+    ScenarioInfo(
+        id="scen_en_u3",
+        unit_id="unit_3",
+        level="A1",
+        language="en-US",
+        title="👨‍👩‍👧 Meeting a New Roommate",
+        character_name="Oliver",
+        character_role="Your new university flatmate",
+        mission_brief="Chat with Oliver. Tell him about your family (brothers, sisters, parents) and where they live.",
+        initial_greeting="Hi! Great to meet you. Do you have any brothers or sisters back home?",
+        initial_greeting_es="¡Hola! Un gusto conocerte. ¿Tienes hermanos o hermanas en tu ciudad?",
+        target_phrases=["I have one brother", "My parents live in...", "How old are you?"],
+    ),
+    ScenarioInfo(
+        id="scen_en_u4",
+        unit_id="unit_4",
+        level="A1",
+        language="en-US",
+        title="⏰ Making Weekend Plans",
+        character_name="Sarah",
+        character_role="Your classmate arranging weekend study plans",
+        mission_brief="Agree on a meeting day and exact time with Sarah (e.g., Saturday at 3:00 PM).",
+        initial_greeting="Hey! Are you free this weekend? What time should we meet up?",
+        initial_greeting_es="¡Hola! ¿Estás libre este fin de semana? ¿A qué hora deberíamos encontrarnos?",
+        target_phrases=["On Saturday at...", "What time?", "That sounds great!"],
+    ),
+    ScenarioInfo(
+        id="scen_en_u5",
+        unit_id="unit_5",
+        level="A1",
+        language="en-US",
+        title="🚆 Asking for Directions to the Station",
+        character_name="Officer Davis",
+        character_role="Friendly police officer on a street corner",
+        mission_brief="Politely ask the officer how to get to the nearest underground station or bus stop.",
+        initial_greeting="Hello! Can I help you with directions?",
+        initial_greeting_es="¡Hola! ¿Puedo ayudarte con direcciones?",
+        target_phrases=["Excuse me, where is...?", "Turn left", "Thank you very much"],
+    ),
+    ScenarioInfo(
+        id="scen_en_u6",
+        unit_id="unit_6",
+        level="A1",
+        language="en-US",
+        title="🩺 At the Chemist / Pharmacy",
+        character_name="Dr. Jenkins",
+        character_role="Pharmacist at a local drugstore",
+        mission_brief="Tell the pharmacist that you have a headache and need something mild to take.",
+        initial_greeting="Hello. What seems to be the problem today?",
+        initial_greeting_es="Hola. ¿Cuál parece ser el problema hoy?",
+        target_phrases=["I have a headache", "Do you have medicine?", "Thank you, doctor"],
+    ),
+]
+
+
+def get_curriculum_scenarios(language: str, level: str = "A1") -> List[ScenarioInfo]:
+    """Retorna los escenarios conversacionales según el idioma."""
+    if language.startswith("de"):
+        return GERMAN_A1_SCENARIOS
+    return ENGLISH_A1_SCENARIOS
+
+
+def get_scenario_by_id(scenario_id: str, language: str, level: str = "A1") -> Optional[ScenarioInfo]:
+    """Busca un escenario específico por su identificador."""
+    for s in get_curriculum_scenarios(language, level):
+        if s.id == scenario_id:
+            return s
+    return None
+
+
+def get_scenarios_for_unit(unit_id: str, language: str, level: str = "A1") -> List[ScenarioInfo]:
+    """Retorna los escenarios vinculados a una unidad temática."""
+    scenarios = get_curriculum_scenarios(language, level)
+    if unit_id == "all":
+        return scenarios
+    filtered = [s for s in scenarios if s.unit_id == unit_id]
+    return filtered or scenarios
+

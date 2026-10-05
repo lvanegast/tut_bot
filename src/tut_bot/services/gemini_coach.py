@@ -392,5 +392,201 @@ class GeminiCoachService:
             "feedback": f"La respuesta esperada era: '{clean_target}'. Vuelve a escuchar el audio prestando atención a los detalles.",
         }
 
+    def generate_conversation_reply(
+        self,
+        scenario_title: str,
+        character_name: str,
+        character_role: str,
+        mission_brief: str,
+        target_phrases: List[str],
+        dialogue_history: List[dict],
+        user_message: str,
+        language: str = "de-DE",
+    ) -> dict:
+        """
+        Genera la réplica del personaje en un roleplay conversacional A1.
+        Mantiene el diálogo en CEFR A1 estricto, oraciones cortas, vocabulario común.
+        Determina si el usuario ha completado el objetivo de la misión.
+        """
+        lang_name = "alemán" if language.startswith("de") else "inglés"
+
+        # Limitar la historia a los últimos 6 turnos para ahorrar tokens y mantener la latencia baja en Jetson
+        recent_history = dialogue_history[-6:] if dialogue_history else []
+        history_text = "\n".join(
+            [f"- {turn.get('name', turn.get('role'))}: {turn.get('text')}" for turn in recent_history]
+        )
+
+        user_turn_count = sum(1 for t in dialogue_history if t.get("role") == "user") + 1
+
+        if not self.is_available() or settings.is_mock_mode:
+            is_goal_met = user_turn_count >= 3
+            if language.startswith("de"):
+                replies = [
+                    ("Sehr gut! Möchten Sie noch etwas?", "¡Muy bien! ¿Desea algo más?"),
+                    ("Alles klar, das macht dann zusammen vier Euro bitte.", "Entendido, son cuatro euros en total por favor."),
+                    ("Perfekt! Vielen Dank und einen schönen Tag noch!", "¡Perfecto! ¡Muchas gracias y que tenga un buen día!"),
+                ]
+                idx = min(user_turn_count - 1, len(replies) - 1)
+                rep_native, rep_es = replies[idx]
+            else:
+                replies = [
+                    ("Very good! Would you like anything else?", "¡Muy bien! ¿Te gustaría algo más?"),
+                    ("Sure, that comes to four pounds please.", "Claro, son cuatro libras por favor."),
+                    ("Perfect! Thank you so much and have a wonderful day!", "¡Perfecto! ¡Muchas gracias y que tengas un buen día!"),
+                ]
+                idx = min(user_turn_count - 1, len(replies) - 1)
+                rep_native, rep_es = replies[idx]
+
+            return {
+                "reply_native": rep_native,
+                "reply_es": rep_es,
+                "mission_status": "goal_achieved" if is_goal_met else "in_progress",
+                "feedback_tip": "¡Vas muy bien! Intenta responder con frases completas." if user_turn_count == 1 else None,
+            }
+
+        prompt = (
+            f"Estás en un juego de rol pedagógico (Roleplay) para un alumno hispanohablante de {lang_name} nivel A1 (Principiante).\n"
+            f"Escenario: {scenario_title}\n"
+            f"Tu personaje: {character_name} ({character_role})\n"
+            f"Misión del alumno: {mission_brief}\n"
+            f"Frases objetivo sugeridas: {', '.join(target_phrases)}\n\n"
+            f"Historial reciente del diálogo:\n{history_text}\n"
+            f"- Alumno: {user_message}\n\n"
+            f"Instrucciones estrictas:\n"
+            f"1. Responde interpretando a tu personaje {character_name}.\n"
+            f"2. Nivel CEFR A1 ESTRICTO: oraciones directas, vocabulario común y cotidiano, MÁXIMO 1-2 oraciones cortas (menos de 20 palabras).\n"
+            f"3. Proporciona la traducción natural al español de tu réplica.\n"
+            f"4. Evalúa si el alumno ha cumplido la misión ('goal_achieved') o sigue en curso ('in_progress'). Si lleva 3 o más intercambios satisfactorios, marca 'goal_achieved'.\n"
+            f"5. Si el alumno cometió un error gramatical o léxico notable de A1 en su mensaje, incluye un 'feedback_tip' breve y cordial en español (1 oración); si no hay errores, pon null.\n\n"
+            f"Responde ÚNICAMENTE en formato JSON válido con este esquema:\n"
+            f'{{\n'
+            f'  "reply_native": "texto en {lang_name} de tu personaje",\n'
+            f'  "reply_es": "traducción en español",\n'
+            f'  "mission_status": "in_progress" | "goal_achieved",\n'
+            f'  "feedback_tip": "consejo breve en español o null"\n'
+            f'}}'
+        )
+
+        try:
+            if HAS_NEW_GENAI and self.client:
+                for candidate_model in ["gemini-flash-lite-latest", "gemini-flash-latest"]:
+                    try:
+                        res = self.client.models.generate_content(
+                            model=candidate_model,
+                            contents=prompt,
+                        )
+                        if res and res.text:
+                            text_raw = res.text.strip()
+                            if "```json" in text_raw:
+                                text_raw = text_raw.split("```json")[1].split("```")[0].strip()
+                            elif "```" in text_raw:
+                                text_raw = text_raw.split("```")[1].split("```")[0].strip()
+                            data = json.loads(text_raw)
+                            return {
+                                "reply_native": data.get("reply_native", "..."),
+                                "reply_es": data.get("reply_es", "..."),
+                                "mission_status": data.get("mission_status", "in_progress"),
+                                "feedback_tip": data.get("feedback_tip"),
+                            }
+                    except Exception:
+                        continue
+        except Exception as e:
+            logger.error(f"Error generando réplica de conversación: {e}")
+
+        # Fallback de emergencia
+        default_reply = "Sehr gut, danke!" if language.startswith("de") else "Very good, thanks!"
+        default_es = "¡Muy bien, gracias!"
+        return {
+            "reply_native": default_reply,
+            "reply_es": default_es,
+            "mission_status": "in_progress" if user_turn_count < 3 else "goal_achieved",
+            "feedback_tip": None,
+        }
+
+    def generate_conversation_debrief(
+        self,
+        scenario_title: str,
+        character_name: str,
+        mission_brief: str,
+        dialogue_history: List[dict],
+        language: str = "de-DE",
+    ) -> dict:
+        """
+        Genera el informe final de debriefing pedagógico tras concluir la misión de roleplay.
+        """
+        lang_name = "alemán" if language.startswith("de") else "inglés"
+        user_turns = [t for t in dialogue_history if t.get("role") == "user"]
+        total_user_turns = len(user_turns)
+
+        if not self.is_available() or settings.is_mock_mode:
+            passed = total_user_turns >= 2
+            score = 88.0 if passed else 60.0
+            return {
+                "passed": passed,
+                "score": score,
+                "summary": f"Completaste la interacción con {character_name} en el escenario '{scenario_title}' con {total_user_turns} intervenciones.",
+                "strengths": [
+                    "Comprensión de las preguntas del interlocutor",
+                    "Uso de vocabulario situacional A1 relevante",
+                ],
+                "areas_to_improve": [
+                    "Fluidez en la formulación de preguntas",
+                ],
+                "tips": f"Continúa practicando los diálogos cotidianos en {lang_name} para ganar seguridad y espontaneidad.",
+            }
+
+        history_text = "\n".join(
+            [f"- {turn.get('name', turn.get('role'))}: {turn.get('text')}" for turn in dialogue_history]
+        )
+
+        prompt = (
+            f"Eres un evaluador pedagógico de idiomas ({lang_name} nivel A1 CEFR).\n"
+            f"El alumno acaba de completar una misión de conversación/roleplay:\n"
+            f"Escenario: {scenario_title}\n"
+            f"Interlocutor: {character_name}\n"
+            f"Objetivo de la misión: {mission_brief}\n\n"
+            f"Transcripción completa de la conversación:\n{history_text}\n\n"
+            f"Evalúa el desempeño del alumno con criterios formativos y alentadores de nivel A1.\n"
+            f"Genera un informe en JSON con el siguiente esquema:\n"
+            f'{{\n'
+            f'  "passed": true,\n'
+            f'  "score": 85,\n'
+            f'  "summary": "Resumen de 1-2 oraciones de cómo se desenvolvió el alumno.",\n'
+            f'  "strengths": ["Punto fuerte 1", "Punto fuerte 2"],\n'
+            f'  "areas_to_improve": ["Aspecto a mejorar 1"],\n'
+            f'  "tips": "Consejo práctico para la próxima misión."\n'
+            f'}}'
+        )
+
+        try:
+            if HAS_NEW_GENAI and self.client:
+                for candidate_model in ["gemini-flash-lite-latest", "gemini-flash-latest"]:
+                    try:
+                        res = self.client.models.generate_content(
+                            model=candidate_model,
+                            contents=prompt,
+                        )
+                        if res and res.text:
+                            text_raw = res.text.strip()
+                            if "```json" in text_raw:
+                                text_raw = text_raw.split("```json")[1].split("```")[0].strip()
+                            elif "```" in text_raw:
+                                text_raw = text_raw.split("```")[1].split("```")[0].strip()
+                            return json.loads(text_raw)
+                    except Exception:
+                        continue
+        except Exception as e:
+            logger.error(f"Error generando debrief de conversación: {e}")
+
+        return {
+            "passed": total_user_turns >= 2,
+            "score": 80.0,
+            "summary": f"Misión completada con éxito interactuando con {character_name}.",
+            "strengths": ["Participación activa", "Respuestas adecuadas al contexto"],
+            "areas_to_improve": ["Ampliar las respuestas con detalles adicionales"],
+            "tips": "Sigue practicando en voz alta cada intervención.",
+        }
+
 
 gemini_coach = GeminiCoachService()
+

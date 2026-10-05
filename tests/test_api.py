@@ -324,6 +324,118 @@ def test_curriculum_and_vocabulary_tracking():
     assert "kaffee" in progress["mastered_words"]
 
 
+def test_conversation_roleplay_service():
+    from tut_bot.services.azure_speech import azure_service
+    from tut_bot.services.curriculum import (
+        get_curriculum_scenarios,
+        get_scenario_by_id,
+        get_scenarios_for_unit,
+    )
+    from tut_bot.services.gemini_coach import gemini_coach
+    from tut_bot.services.tracker import tracker
+
+    user_id = "test_user_conv_roleplay"
+    tracker.set_user_language(user_id, "de-DE")
+    tracker.set_user_level(user_id, "A1")
+    tracker.set_user_unit(user_id, "unit_2")
+
+    # 1. Recuperar escenario de la unidad 2 (Panadería / Cafetería)
+    all_scens = get_curriculum_scenarios("de-DE", "A1")
+    assert len(all_scens) == 6
+
+    scenarios = get_scenarios_for_unit("unit_2", "de-DE", "A1")
+    assert len(scenarios) > 0
+    scen = scenarios[0]
+    assert scen.id == "scen_de_u2"
+    assert "Bäckerei" in scen.character_role or "Panadería" in scen.title
+
+    by_id = get_scenario_by_id(scen.id, "de-DE", "A1")
+    assert by_id is not None
+    assert by_id.character_name == scen.character_name
+
+    # 2. Iniciar sesión de conversación
+    conv = tracker.start_conversation(
+        user_id=user_id,
+        language="de-DE",
+        level="A1",
+        scenario_id=scen.id,
+        scenario_title=scen.title,
+        mission_brief=scen.mission_brief,
+        character_name=scen.character_name,
+        initial_greeting=scen.initial_greeting,
+        initial_greeting_es=scen.initial_greeting_es,
+    )
+    assert conv["conversation_id"] is not None
+    assert conv["character_name"] == scen.character_name
+
+    state = tracker.get_user_state(user_id)
+    assert state["fsm_state"] == "IN_CONVERSATION"
+    assert state["skill_mode"] == "conversation"
+
+    # 3. Intercambio de diálogo
+    active = tracker.get_active_conversation(user_id)
+    assert active is not None
+    assert len(active["turns"]) == 1  # Saludo inicial
+
+    # Simular turno del alumno
+    tracker.append_conversation_turn(
+        user_id=user_id,
+        role="user",
+        text="Guten Tag! Ich möchte zwei Brötchen bitte.",
+        name="Alumno",
+    )
+
+    # Generar réplica pedagógica con Gemini Coach
+    reply = gemini_coach.generate_conversation_reply(
+        scenario_title=scen.title,
+        character_name=scen.character_name,
+        character_role=scen.character_role,
+        mission_brief=scen.mission_brief,
+        target_phrases=scen.target_phrases,
+        dialogue_history=active["turns"],
+        user_message="Guten Tag! Ich möchte zwei Brötchen bitte.",
+        language="de-DE",
+    )
+    assert "reply_native" in reply
+    assert "reply_es" in reply
+    assert reply["mission_status"] in ("in_progress", "goal_achieved")
+
+    # Registrar réplica del personaje
+    tracker.append_conversation_turn(
+        user_id=user_id,
+        role="character",
+        text=reply["reply_native"],
+        text_es=reply["reply_es"],
+        name=scen.character_name,
+    )
+
+    # Verificar historial actualizado
+    updated_conv = tracker.get_active_conversation(user_id)
+    assert len(updated_conv["turns"]) == 3
+
+    # 4. Transcripción de audio (Azure STT mock/real)
+    transcription = azure_service.transcribe_speech("dummy_path.wav", language="de-DE")
+    assert len(transcription) > 0
+
+    # 5. Generar informe de debriefing
+    debrief = gemini_coach.generate_conversation_debrief(
+        scenario_title=scen.title,
+        character_name=scen.character_name,
+        mission_brief=scen.mission_brief,
+        dialogue_history=updated_conv["turns"],
+        language="de-DE",
+    )
+    assert debrief["score"] >= 60.0
+    assert "summary" in debrief
+    assert len(debrief["strengths"]) > 0
+
+    # 6. Concluir misión y verificar transición FSM
+    completed = tracker.complete_conversation(user_id)
+    assert completed is not None
+    final_state = tracker.get_user_state(user_id)
+    assert final_state["fsm_state"] == "CONVERSATION_SUMMARY"
+
+
 if __name__ == "__main__":
     test_health_endpoint()
     test_exercises_endpoints()
@@ -338,4 +450,6 @@ if __name__ == "__main__":
     test_telegram_bot_service()
     test_fsm_progression_and_level_graduation()
     test_curriculum_and_vocabulary_tracking()
+    test_conversation_roleplay_service()
     print("\n[EXITO] Todas las pruebas unitarias pasaron correctamente!")
+

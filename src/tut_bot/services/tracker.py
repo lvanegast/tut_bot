@@ -112,6 +112,29 @@ class ProgressTracker:
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_user_vocab ON user_vocabulary(user_id, language)"
             )
+
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS user_conversations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    language TEXT NOT NULL,
+                    level TEXT NOT NULL,
+                    unit_id TEXT NOT NULL,
+                    scenario_id TEXT NOT NULL,
+                    scenario_title TEXT NOT NULL,
+                    mission_brief TEXT NOT NULL,
+                    character_name TEXT NOT NULL,
+                    turns_json TEXT NOT NULL DEFAULT '[]',
+                    is_completed INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_user_conv ON user_conversations(user_id, is_completed)"
+            )
             conn.commit()
 
     def get_user_state(self, user_id: str) -> Dict[str, Any]:
@@ -202,15 +225,16 @@ class ProgressTracker:
     def set_user_skill_mode(self, user_id: str, skill_mode: str):
         self.get_user_state(user_id)
         now = datetime.now(timezone.utc).isoformat()
+        target_fsm = "IN_CONVERSATION" if skill_mode == "conversation" else "IN_EXERCISE"
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
                 UPDATE user_states
-                SET skill_mode = ?, exercise_index = 0, fsm_state = 'IN_EXERCISE', custom_phrase = NULL, updated_at = ?
+                SET skill_mode = ?, exercise_index = 0, fsm_state = ?, custom_phrase = NULL, updated_at = ?
                 WHERE user_id = ?
                 """,
-                (skill_mode, now, user_id),
+                (skill_mode, target_fsm, now, user_id),
             )
             conn.commit()
 
@@ -573,6 +597,160 @@ class ProgressTracker:
             "weak_phonemes": [p for p, _ in phoneme_counter.most_common(5)],
             "recent_history": recent,
         }
+
+    def start_conversation(
+        self,
+        user_id: str,
+        language: str,
+        level: str,
+        scenario_id: str,
+        scenario_title: str,
+        mission_brief: str,
+        character_name: str,
+        initial_greeting: str,
+        initial_greeting_es: str,
+        unit_id: str = "unit_1",
+    ) -> Dict[str, Any]:
+        """Inicia una nueva sesión conversacional de roleplay activo."""
+        self.get_user_state(user_id)
+        now = datetime.now(timezone.utc).isoformat()
+        initial_turn = [
+            {
+                "role": "character",
+                "name": character_name,
+                "text": initial_greeting,
+                "text_es": initial_greeting_es,
+                "timestamp": now,
+            }
+        ]
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            # Cerrar conversaciones abiertas previas
+            cursor.execute(
+                "UPDATE user_conversations SET is_completed = 1, updated_at = ? WHERE user_id = ? AND is_completed = 0",
+                (now, user_id),
+            )
+            cursor.execute(
+                """
+                INSERT INTO user_conversations (
+                    user_id, language, level, unit_id, scenario_id, scenario_title,
+                    mission_brief, character_name, turns_json, is_completed, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+                """,
+                (
+                    user_id,
+                    language,
+                    level,
+                    unit_id,
+                    scenario_id,
+                    scenario_title,
+                    mission_brief,
+                    character_name,
+                    json.dumps(initial_turn),
+                    now,
+                    now,
+                ),
+            )
+            conn.commit()
+            conv_id = cursor.lastrowid
+
+        self.set_user_skill_mode(user_id, "conversation")
+        self.set_fsm_state(user_id, "IN_CONVERSATION")
+        return {
+            "conversation_id": conv_id,
+            "scenario_id": scenario_id,
+            "scenario_title": scenario_title,
+            "mission_brief": mission_brief,
+            "character_name": character_name,
+            "turns": initial_turn,
+        }
+
+    def get_active_conversation(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """Recupera la conversación de roleplay activa del usuario si existe."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT * FROM user_conversations
+                WHERE user_id = ? AND is_completed = 0
+                ORDER BY id DESC LIMIT 1
+                """,
+                (user_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            row_dict = dict(row)
+            try:
+                turns = json.loads(row_dict.get("turns_json", "[]"))
+            except Exception:
+                turns = []
+            row_dict["turns"] = turns
+            return row_dict
+
+    def append_conversation_turn(
+        self,
+        user_id: str,
+        role: str,
+        text: str,
+        text_es: Optional[str] = None,
+        name: Optional[str] = None,
+    ):
+        """Agrega un turno (del alumno o del personaje) al diálogo activo."""
+        active = self.get_active_conversation(user_id)
+        if not active:
+            return
+        now = datetime.now(timezone.utc).isoformat()
+        turns = active.get("turns", [])
+        turn_data = {
+            "role": role,
+            "name": name or (active["character_name"] if role == "character" else "Alumno"),
+            "text": text,
+            "text_es": text_es,
+            "timestamp": now,
+        }
+        turns.append(turn_data)
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE user_conversations
+                SET turns_json = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (json.dumps(turns), now, active["id"]),
+            )
+            conn.commit()
+
+    def complete_conversation(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """Marca la conversación activa como completada y devuelve el registro final."""
+        active = self.get_active_conversation(user_id)
+        if not active:
+            return None
+        now = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE user_conversations SET is_completed = 1, updated_at = ? WHERE id = ?",
+                (now, active["id"]),
+            )
+            conn.commit()
+        self.set_fsm_state(user_id, "CONVERSATION_SUMMARY")
+        return active
+
+    def cancel_conversation(self, user_id: str):
+        """Cancela la conversación activa y regresa al modo ejercicios."""
+        now = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE user_conversations SET is_completed = 1, updated_at = ? WHERE user_id = ? AND is_completed = 0",
+                (now, user_id),
+            )
+            conn.commit()
+        self.set_fsm_state(user_id, "IN_EXERCISE")
+        self.set_user_skill_mode(user_id, "speaking")
 
 
 tracker = ProgressTracker()
