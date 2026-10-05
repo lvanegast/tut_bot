@@ -1,9 +1,12 @@
+version: '3.8'
+
 services:
-  tut-bot:
+  tutbot_service:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: tut-bot
+    image: tutbot:arm64
+    container_name: tutbot_service
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -14,8 +17,23 @@ services:
     environment:
       - PORT=8000
       - HOST=0.0.0.0
-    # Límites de memoria recomendados para correr ligero en Jetson Nano junto a otros contenedores
+      - PYTHONUNBUFFERED=1
+    # Límites estrictos de hardware para Jetson Nano (compatibles con Compose v1 y v2)
+    mem_limit: 768m
+    mem_reservation: 256m
+    cpus: 1.5
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 768M
+          cpus: '1.5'
+        reservations:
+          memory: 256M
+    networks:
+      - tutbot_network
+
+networks:
+  tutbot_network:
+    name: tutbot_network
+    driver: bridge
+
