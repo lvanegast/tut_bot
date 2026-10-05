@@ -1,4 +1,4 @@
-version: '3.8'
+version: '2.2'
 
 services:
   tutbot_service:
@@ -18,22 +18,7 @@ services:
       - PORT=8000
       - HOST=0.0.0.0
       - PYTHONUNBUFFERED=1
-    # Límites estrictos de hardware para Jetson Nano (compatibles con Compose v1 y v2)
+    # Límites estrictos de hardware para Jetson Nano (Compose 1.17.1 & Compose v2)
     mem_limit: 768m
     mem_reservation: 256m
     cpus: 1.5
-    deploy:
-      resources:
-        limits:
-          memory: 768M
-          cpus: '1.5'
-        reservations:
-          memory: 256M
-    networks:
-      - tutbot_network
-
-networks:
-  tutbot_network:
-    name: tutbot_network
-    driver: bridge
-
