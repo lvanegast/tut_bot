@@ -39,6 +39,17 @@ Todo ejercicio, drill o diálogo debe respetar los estándares oficiales de exam
   2. La colocación exacta de los órganos articuladores (lengua, dientes, labios, cuerda vocal).
   3. Un *drill* mínimo contrastivo de 2-3 palabras.
 
-## 4. Restricciones de Recursos en el Edge (NVIDIA Jetson Nano)
-- **Almacenamiento Flash:** Todos los archivos de audio convertidos (.ogg, .wav) deben ser estrictamente temporales y purgados automáticamente.
-- **Consumo de Memoria:** Mantener el proceso principal bajo 512 MB de RAM. No cargar modelos pesados locales si se pueden delegar a APIs en la nube (Azure Speech / Google Gemini).
+## 4. Restricciones de Recursos y Despliegue en el Edge (NVIDIA Jetson Nano)
+- **Compatibilidad con Docker Compose 1.17.1 (Ubuntu 18.04 LTS):**
+  - La Jetson Nano corre `docker-compose` versión `1.17.1`.
+  - En esta versión de Compose, la directiva `version: "3.8"` ignora silenciosamente los límites de memoria si no se opera en modo Docker Swarm.
+  - El archivo `docker-compose.yml` **DEBE** usar la especificación estándar **`version: '2.2'`**, la cual activa y aplica de forma estricta los límites en el kernel de Linux:
+    - `mem_limit: 768m` (protección obligatoria contra el OOM Killer).
+    - `mem_reservation: 256m`.
+    - `cpus: 1.5` (protege los 4 cores ARM Cortex-A57 para que el bot de trading preexistente en puerto 8080 no sufra contención).
+  - Evitar opciones no soportadas en Compose 1.17.1 como `networks.<net>.name` o `deploy.resources` en Compose v1.
+- **Puertos y Convivencia 24/7:**
+  - `tut_bot` escucha exclusivamente en el puerto **`8000`**.
+  - Prohibido tocar los puertos reservados: `22` (SSH host), `8080` (Trading bot) y `5432` (PostgreSQL trading).
+- **Almacenamiento Flash:** Todos los archivos de audio convertidos (.ogg, .wav) deben ser estrictamente temporales y purgados automáticamente en bloques `finally`.
+- **Consumo de Memoria:** Mantener el proceso principal bajo 512 MB de RAM real. No cargar modelos locales pesados en la Jetson, delegando STT/TTS a Azure Speech y razonamiento a Google Gemini.
