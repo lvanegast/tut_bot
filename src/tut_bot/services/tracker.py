@@ -93,6 +93,10 @@ class ProgressTracker:
                 cursor.execute(
                     "ALTER TABLE user_states ADD COLUMN active_unit TEXT NOT NULL DEFAULT 'all'"
                 )
+            if "completed_units" not in cols:
+                cursor.execute(
+                    "ALTER TABLE user_states ADD COLUMN completed_units TEXT NOT NULL DEFAULT '[]'"
+                )
 
             cursor.execute(
                 """
@@ -163,6 +167,12 @@ class ProgressTracker:
                 except Exception:
                     passed_levels = []
 
+                units_raw = row_dict.get("completed_units", "[]")
+                try:
+                    completed_units = json.loads(units_raw) if units_raw else []
+                except Exception:
+                    completed_units = []
+
                 return {
                     "user_id": row_dict["user_id"],
                     "language": row_dict["language"],
@@ -175,6 +185,7 @@ class ProgressTracker:
                     "unlocked_levels": unlocked_levels,
                     "passed_levels": passed_levels,
                     "active_unit": row_dict.get("active_unit", "all"),
+                    "completed_units": completed_units,
                     "updated_at": row_dict["updated_at"],
                 }
 
@@ -182,8 +193,8 @@ class ProgressTracker:
             now = datetime.now(timezone.utc).isoformat()
             cursor.execute(
                 """
-                INSERT INTO user_states (user_id, language, exercise_index, custom_phrase, skill_mode, level, fsm_state, completed_exercises, unlocked_levels, passed_levels, active_unit, updated_at)
-                VALUES (?, 'de-DE', 0, NULL, 'speaking', 'A1', 'IN_EXERCISE', '[]', '[\"A1\"]', '[]', 'all', ?)
+                INSERT INTO user_states (user_id, language, exercise_index, custom_phrase, skill_mode, level, fsm_state, completed_exercises, unlocked_levels, passed_levels, active_unit, completed_units, updated_at)
+                VALUES (?, 'de-DE', 0, NULL, 'speaking', 'A1', 'IN_EXERCISE', '[]', '[\"A1\"]', '[]', 'all', '[]', ?)
                 """,
                 (user_id, now),
             )
@@ -200,6 +211,7 @@ class ProgressTracker:
                 "unlocked_levels": ["A1"],
                 "passed_levels": [],
                 "active_unit": "all",
+                "completed_units": [],
                 "updated_at": now,
             }
 
@@ -315,15 +327,57 @@ class ProgressTracker:
                 )
                 conn.commit()
 
-    def advance_exercise_fsm(self, user_id: str, total_exercises: int) -> Dict[str, Any]:
+    def mark_unit_completed(
+        self, user_id: str, language: str, level: str, unit_id: str
+    ) -> List[str]:
+        """Registra una unidad temática completada para el usuario y retorna la lista de unidades aprobadas del nivel."""
+        key = f"{language}_{level}_{unit_id}"
+        state = self.get_user_state(user_id)
+        completed = set(state.get("completed_units", []))
+        if key not in completed:
+            completed.add(key)
+            now = datetime.now(timezone.utc).isoformat()
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    UPDATE user_states
+                    SET completed_units = ?, updated_at = ?
+                    WHERE user_id = ?
+                    """,
+                    (json.dumps(sorted(list(completed))), now, user_id),
+                )
+                conn.commit()
+
+        prefix = f"{language}_{level}_"
+        return [u.replace(prefix, "") for u in completed if u.startswith(prefix)]
+
+    def get_completed_units(self, user_id: str, language: str, level: str) -> List[str]:
+        """Obtiene la lista de IDs de unidades completadas para un nivel e idioma dados."""
+        state = self.get_user_state(user_id)
+        completed = set(state.get("completed_units", []))
+        prefix = f"{language}_{level}_"
+        return [u.replace(prefix, "") for u in completed if u.startswith(prefix)]
+
+    def advance_exercise_fsm(
+        self,
+        user_id: str,
+        total_exercises: int,
+        current_unit_id: Optional[str] = None,
+        require_all_units: bool = False,
+    ) -> Dict[str, Any]:
         """
         Avanza la máquina de estados pedagógica.
-        - Si quedan ejercicios en el nivel actual: avanza al siguiente (IN_EXERCISE).
-        - Si llegó al final del nivel: transiciona a LEVEL_COMPLETED (¡evita bucle repetitivo!).
+        - Si quedan ejercicios en la serie actual: avanza al siguiente (IN_EXERCISE).
+        - Si require_all_units=True o se especifica unidad temática: transiciona a UNIT_COMPLETED
+          y solo a LEVEL_COMPLETED cuando se aprueban las 6 unidades oficiales de A1.
         """
         state = self.get_user_state(user_id)
         current_idx = state["exercise_index"]
         next_idx = current_idx + 1
+        lang = state["language"]
+        level = state["level"]
+        skill = state["skill_mode"]
 
         if next_idx < total_exercises:
             self.set_user_exercise_index(user_id, next_idx)
@@ -334,26 +388,72 @@ class ProgressTracker:
                 "total": total_exercises,
             }
         else:
-            # Hito alcanzado: completó todos los ejercicios del nivel y destreza actual
-            self.set_fsm_state(user_id, "LEVEL_COMPLETED")
-            lang = state["language"]
-            level = state["level"]
-            skill = state["skill_mode"]
-            self.mark_level_passed(user_id, lang, level, skill)
+            # Llegó al final de la serie
+            if require_all_units or (current_unit_id and current_unit_id != "all"):
+                unit_to_mark = (
+                    current_unit_id
+                    if (current_unit_id and current_unit_id != "all")
+                    else state.get("active_unit", "unit_1")
+                )
+                if unit_to_mark == "all":
+                    unit_to_mark = "unit_1"
 
-            # Desbloquear automáticamente el siguiente nivel en la progresión CEFR
-            next_level = "A2" if level == "A1" else ("B1" if level == "A2" else None)
-            if next_level:
-                self.unlock_level(user_id, next_level)
+                completed_units = self.mark_unit_completed(user_id, lang, level, unit_to_mark)
+                total_units = 6  # 6 Unidades Temáticas oficiales por nivel
 
-            return {
-                "status": "level_completed",
-                "language": lang,
-                "level": level,
-                "skill_mode": skill,
-                "next_level": next_level,
-                "total_completed": total_exercises,
-            }
+                unit_num = 1
+                if unit_to_mark.startswith("unit_"):
+                    try:
+                        unit_num = int(unit_to_mark.replace("unit_", ""))
+                    except ValueError:
+                        unit_num = 1
+                next_unit_num = unit_num + 1
+                next_unit_id = f"unit_{next_unit_num}" if next_unit_num <= total_units else None
+
+                all_units_done = len(completed_units) >= total_units
+
+                if all_units_done:
+                    self.set_fsm_state(user_id, "LEVEL_COMPLETED")
+                    self.mark_level_passed(user_id, lang, level, skill)
+                    next_level = "A2" if level == "A1" else ("B1" if level == "A2" else None)
+                    if next_level:
+                        self.unlock_level(user_id, next_level)
+                    return {
+                        "status": "level_completed",
+                        "language": lang,
+                        "level": level,
+                        "skill_mode": skill,
+                        "next_level": next_level,
+                        "total_completed": total_exercises,
+                        "units_completed": len(completed_units),
+                        "total_units": total_units,
+                    }
+                else:
+                    self.set_fsm_state(user_id, "UNIT_COMPLETED")
+                    return {
+                        "status": "unit_completed",
+                        "language": lang,
+                        "level": level,
+                        "skill_mode": skill,
+                        "completed_unit": unit_to_mark,
+                        "next_unit": next_unit_id,
+                        "units_completed_count": len(completed_units),
+                        "total_units": total_units,
+                    }
+            else:
+                self.set_fsm_state(user_id, "LEVEL_COMPLETED")
+                self.mark_level_passed(user_id, lang, level, skill)
+                next_level = "A2" if level == "A1" else ("B1" if level == "A2" else None)
+                if next_level:
+                    self.unlock_level(user_id, next_level)
+                return {
+                    "status": "level_completed",
+                    "language": lang,
+                    "level": level,
+                    "skill_mode": skill,
+                    "next_level": next_level,
+                    "total_completed": total_exercises,
+                }
 
     def mark_level_passed(self, user_id: str, language: str, level: str, skill_mode: str):
         """Registra que una destreza de un nivel específico fue completada y aprobada."""

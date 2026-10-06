@@ -83,7 +83,7 @@ class GeminiCoachService:
             f"Responde en MÁXIMO 2 viñetas breves (menos de 45 palabras en total):\n"
             f"• 👄 **Articulación**: Dónde colocar lengua/labios para el sonido más errado en 1 sola frase directa.\n"
             f"• 🎯 **Truco**: Metáfora o mini-drill inmediato.\n"
-            f"Sé directo, sin saludos ni introducciones."
+            f"REGLA CRÍTICA: NUNCA uses encabezados con almohadillas (# o ##). Sé directo, sin saludos ni introducciones."
         )
 
         try:

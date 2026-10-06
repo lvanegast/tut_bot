@@ -278,6 +278,44 @@ def test_fsm_progression_and_level_graduation():
     assert "de_a1_spk_01" in state["completed_exercises"]
 
 
+def test_fsm_unit_progression_requires_all_6_units():
+    from tut_bot.services.tracker import tracker
+
+    import uuid
+    user_id = f"test_fsm_units_6_flow_{uuid.uuid4().hex[:8]}"
+    tracker.set_user_language(user_id, "de-DE")
+    tracker.set_user_level(user_id, "A1")
+    tracker.set_user_skill_mode(user_id, "speaking")
+
+    # 1. Completar unidad 1 de 6 -> Debe marcar UNIT_COMPLETED y NO desbloquear A2
+    step = tracker.advance_exercise_fsm(user_id, total_exercises=1, current_unit_id="unit_1", require_all_units=True)
+    assert step["status"] == "unit_completed"
+    assert step["completed_unit"] == "unit_1"
+    assert step["next_unit"] == "unit_2"
+    assert step["units_completed_count"] == 1
+    assert step["total_units"] == 6
+
+    state = tracker.get_user_state(user_id)
+    assert state["fsm_state"] == "UNIT_COMPLETED"
+    assert "A2" not in state["unlocked_levels"]
+
+    # 2. Completar unidades 2 a 5
+    for u in [2, 3, 4, 5]:
+        res = tracker.advance_exercise_fsm(user_id, total_exercises=1, current_unit_id=f"unit_{u}", require_all_units=True)
+        assert res["status"] == "unit_completed"
+        assert "A2" not in tracker.get_user_state(user_id)["unlocked_levels"]
+
+    # 3. Completar la sexta unidad (unit_6) -> Ahora sí se gradúa a nivel A1 completo y desbloquea A2
+    final_step = tracker.advance_exercise_fsm(user_id, total_exercises=1, current_unit_id="unit_6", require_all_units=True)
+    assert final_step["status"] == "level_completed"
+    assert final_step["next_level"] == "A2"
+    assert final_step["units_completed"] == 6
+
+    final_state = tracker.get_user_state(user_id)
+    assert final_state["fsm_state"] == "LEVEL_COMPLETED"
+    assert "A2" in final_state["unlocked_levels"]
+
+
 def test_curriculum_and_vocabulary_tracking():
     from tut_bot.services.curriculum import (
         TOTAL_A1_LEXICON_COUNT,

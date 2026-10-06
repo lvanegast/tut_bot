@@ -49,12 +49,27 @@ def _make_progress_bar(score: Optional[float], length: int = 10) -> str:
 
 
 def _format_markdown_for_telegram(text: str) -> str:
-    """Convierte markdown básico (**negrita**, *cursiva*) a formato HTML válido para Telegram."""
+    """Convierte markdown (encabezados, **negrita**, *cursiva*) a formato HTML válido para Telegram sin dejar marcas como ##."""
     if not text:
         return ""
     # 1. Escapar entidades HTML especiales
     text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    # 2. Convertir **negrita**
+
+    # 2. Convertir encabezados Markdown (#, ##, ###) a negrita limpia
+    lines = []
+    for line in text.split("\n"):
+        header_match = re.match(r"^\s*#{1,6}\s*(.+)$", line)
+        if header_match:
+            header_content = header_match.group(1).strip()
+            lines.append(f"<b>{header_content}</b>")
+        else:
+            lines.append(line)
+    text = "\n".join(lines)
+
+    # 3. Limpiar cualquier ## o # suelto al inicio o entre texto
+    text = re.sub(r"#{2,}", "", text)
+
+    # 4. Convertir **negrita**
     parts = text.split("**")
     if len(parts) > 1:
         res = []
@@ -64,7 +79,8 @@ def _format_markdown_for_telegram(text: str) -> str:
             else:
                 res.append(part)
         text = "".join(res)
-    # 3. Convertir *cursiva* si queda
+
+    # 5. Convertir *cursiva* si queda
     parts = text.split("*")
     if len(parts) > 1:
         res = []
@@ -74,7 +90,8 @@ def _format_markdown_for_telegram(text: str) -> str:
             else:
                 res.append(part)
         text = "".join(res)
-    return text
+
+    return text.strip()
 
 
 def get_phoneme_explanation(phoneme: str, language: str = "de-DE") -> str:
@@ -548,9 +565,10 @@ class TelegramCoachBot:
         skill_name = skill_names.get(skill, skill)
 
         lines = [
-            "🏆 <b>¡FELICITACIONES! MÓDULO COMPLETADO</b> 🏆\n",
-            f"Has completado con éxito todos los ejercicios de <b>{skill_name}</b> en nivel <b>{level}</b> ({lang_name}).",
+            "🏆 <b>¡SERIE DE EJERCICIOS COMPLETADA!</b> 🏆\n",
+            f"Has completado con éxito la serie de <b>{skill_name}</b> en nivel <b>{level}</b> ({lang_name}).",
             "🎉 <i>Tu logro ha sido registrado en tu historial de aprendizaje.</i>\n",
+            f"💡 <i>Nota sobre vocabulario: Para dominar las ~650 palabras de la meta oficial {level}, continúa explorando las 6 Unidades Temáticas con /temas y practicando las demás habilidades (Escribir, Escuchar y Conversar).</i>\n",
         ]
 
         keyboard = []
@@ -582,6 +600,72 @@ class TelegramCoachBot:
                 await self._safe_edit_text(update.callback_query, msg_text, reply_markup=reply_markup)
             except Exception:
                 await self._safe_send_chat_message(update.effective_chat, msg_text, reply_markup=reply_markup)
+        else:
+            await self._safe_send_chat_message(update.effective_chat, msg_text, reply_markup=reply_markup)
+
+    async def _send_unit_completed_card(
+        self,
+        update: Update,
+        user_id: str,
+        info: Dict[str, Any],
+        edit_message: bool = False,
+    ):
+        """Muestra la tarjeta de unidad completada y guía al alumno hacia la siguiente unidad sin saltarse el nivel."""
+        state = tracker.get_user_state(user_id)
+        lang = info.get("language") or state["language"]
+        level = info.get("level") or state.get("level", "A1")
+        skill = info.get("skill_mode") or state.get("skill_mode", "speaking")
+        completed_unit = info.get("completed_unit", "unit_1")
+        next_unit = info.get("next_unit")
+        units_done = info.get("units_completed_count", 1)
+        total_units = info.get("total_units", 6)
+
+        u_info = get_unit_by_id(completed_unit, lang, level)
+        u_title = f"{u_info.icon} {u_info.title_es}" if u_info else completed_unit
+
+        next_u_info = get_unit_by_id(next_unit, lang, level) if next_unit else None
+        next_title = f"{next_u_info.icon} {next_u_info.title_es}" if next_u_info else next_unit
+
+        bar = _make_progress_bar((units_done / total_units) * 100.0)
+
+        lines = [
+            "🎉 <b>¡UNIDAD TEMÁTICA COMPLETADA!</b> 🎉\n",
+            f"Has completado con éxito la unidad: <b>{u_title}</b>.",
+            f"📊 <b>Progreso de Unidades en Nivel {level}:</b>\n",
+            f"• <code>[{bar}]</code> <b>{units_done} / {total_units}</b> unidades aprobadas ({int((units_done / total_units) * 100)}%)\n",
+        ]
+
+        keyboard = []
+        if next_unit:
+            lines.append(f"👉 <b>Siguiente Unidad:</b> {next_title}")
+            lines.append("<i>Para graduarte de A1 debes completar las 6 unidades temáticas oficiales.</i>")
+            keyboard.append([
+                InlineKeyboardButton(f"➡️ Pasar a: {next_title}", callback_data=f"fsm_next_unit_{next_unit}")
+            ])
+        else:
+            lines.append("🌟 <b>¡Has cubierto todas las unidades de este nivel!</b>")
+
+        keyboard.extend([
+            [
+                InlineKeyboardButton("🔄 Repasar esta Unidad", callback_data=f"unit_sel_{completed_unit}"),
+                InlineKeyboardButton("📂 Ver Todas las Unidades", callback_data="btn_units_menu"),
+            ],
+            [
+                InlineKeyboardButton("🎯 Cambiar Modo (Escribir/Escuchar)", callback_data="btn_mode_menu"),
+                InlineKeyboardButton("📊 Mis Estadísticas", callback_data="btn_stats"),
+            ],
+        ])
+
+        msg_text = "\n".join(lines)
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        if edit_message and update.callback_query:
+            try:
+                await self._safe_edit_text(update.callback_query, msg_text, reply_markup=reply_markup)
+            except Exception:
+                await self._safe_send_chat_message(update.effective_chat, msg_text, reply_markup=reply_markup)
+        else:
+            await self._safe_send_chat_message(update.effective_chat, msg_text, reply_markup=reply_markup)
+
     async def cmd_conversation(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Inicia o retoma una misión de conversación interactiva (roleplay con IA)."""
         user_id = f"tg_{update.effective_user.id}"
@@ -1191,9 +1275,12 @@ class TelegramCoachBot:
         lex_percent = lex_prog["percentage"]
         lex_bar = _make_progress_bar(lex_percent)
 
+        completed_ex_cnt = len(user_state.get("completed_exercises", []))
         lex_section = (
-            f"📚 <b>Inventario Léxico {level} ({exam_name}):</b>\n"
-            f"• <code>[{lex_bar}]</code> <b>{mastered_cnt} / {total_target}</b> palabras dominadas ({lex_percent:.1f}%)\n\n"
+            f"📚 <b>Inventario Léxico Oficial {level} ({exam_name}):</b>\n"
+            f"• <code>[{lex_bar}]</code> <b>{mastered_cnt} / {total_target}</b> palabras dominadas ({lex_percent:.1f}%)\n"
+            f"• <b>Ejercicios completados:</b> {completed_ex_cnt}\n"
+            f"💡 <i>(La meta de suficiencia oficial {level} es de {total_target} palabras. Practica las 6 unidades con /temas para seguir sumando palabras)</i>\n\n"
         )
 
         if stats["total_attempts"] == 0:
@@ -1380,17 +1467,29 @@ class TelegramCoachBot:
 
         elif data == "vocab_card":
             state = tracker.get_user_state(user_id)
+            skill_mode = state.get("skill_mode", "speaking")
             exercises = get_exercises(
                 language=state["language"],
                 level=state.get("level", "A1"),
-                skill_type=state.get("skill_mode", "speaking"),
+                skill_type=skill_mode,
             )
             if not exercises:
                 exercises = get_exercises(language=state["language"])
             idx = state["exercise_index"] % len(exercises)
             ex = exercises[idx]
 
-            if ex.vocabulary_breakdown:
+            if skill_mode == "listening":
+                lines = [
+                    f"📖 <b>Vocabulario de apoyo [{ex.level}]:</b>\n",
+                    "🔑 <i>Palabras de apoyo para agudizar el oído sin revelar la solución:</i>\n",
+                ]
+                if ex.vocabulary_breakdown:
+                    for w, mean in ex.vocabulary_breakdown.items():
+                        lines.append(f"• <b>{w}</b>: {mean}")
+                if ex.grammar_note:
+                    lines.append(f"\n💡 <b>Pista gramatical:</b> <i>{ex.grammar_note}</i>")
+                vocab_msg = "\n".join(lines)
+            elif ex.vocabulary_breakdown:
                 lines = [
                     f"📖 <b>Vocabulario de la frase [{ex.level}]:</b>\n",
                     f'👉 <i>"{ex.target_text}"</i>\n',
@@ -1487,22 +1586,39 @@ class TelegramCoachBot:
 
         elif data == "ex_next":
             state = tracker.get_user_state(user_id)
+            active_unit = state.get("active_unit", "all")
             exercises = get_exercises(
                 language=state["language"],
                 level=state.get("level", "A1"),
                 skill_type=state.get("skill_mode", "speaking"),
+                unit_id=active_unit,
             )
             if not exercises:
                 exercises = get_exercises(language=state["language"])
 
-            advance_info = tracker.advance_exercise_fsm(user_id, len(exercises))
+            advance_info = tracker.advance_exercise_fsm(
+                user_id, len(exercises), current_unit_id=active_unit, require_all_units=True
+            )
             if advance_info["status"] == "next_exercise":
                 await self._send_exercise_card(update, user_id, edit_message=True)
+            elif advance_info["status"] == "unit_completed":
+                await self._send_unit_completed_card(
+                    update, user_id, advance_info, edit_message=True
+                )
             else:
-                # Transición formal de la FSM a LEVEL_COMPLETED
+                # Transición formal de la FSM a LEVEL_COMPLETED (las 6 unidades aprobadas)
                 await self._send_level_completed_card(
                     update, user_id, advance_info, edit_message=True
                 )
+
+        elif data.startswith("fsm_next_unit_"):
+            next_unit = data.replace("fsm_next_unit_", "")
+            tracker.set_user_unit(user_id, next_unit)
+            await self._safe_edit_text(
+                query,
+                f"🚀 <b>Iniciando {next_unit}...</b>\n¡Cargando tus nuevos ejercicios!",
+            )
+            await self._send_exercise_card(update, user_id, edit_message=False)
 
         elif data == "ex_prev":
             state = tracker.get_user_state(user_id)
@@ -1578,14 +1694,22 @@ class TelegramCoachBot:
 
         caption_flag = "🇩🇪" if lang.startswith("de") else "🇺🇸"
         icon = "🐢" if slow else "🔊"
-        label = (
-            f"{icon} <b>Referencia pausada (0.8x - {caption_flag}):</b>"
-            if slow
-            else f"{icon} <b>Referencia nativa ({caption_flag}):</b>"
-        )
+        if state.get("skill_mode") == "listening":
+            caption = (
+                f"{icon} <b>Audio de Comprensión Auditiva ({caption_flag}{' - 0.8x' if slow else ''}):</b>\n"
+                f"🎧 <i>Escucha con atención y selecciona tu respuesta en la tarjeta del ejercicio arriba.</i>"
+            )
+        else:
+            label = (
+                f"{icon} <b>Referencia pausada (0.8x - {caption_flag}):</b>"
+                if slow
+                else f"{icon} <b>Referencia nativa ({caption_flag}):</b>"
+            )
+            caption = f'{label}\n"{text}"'
+
         await query.message.reply_voice(
             voice=audio_stream,
-            caption=f'{label}\n"{text}"',
+            caption=caption,
             parse_mode=ParseMode.HTML,
         )
 
@@ -2034,33 +2158,39 @@ class TelegramCoachBot:
             flu_bar = _make_progress_bar(eval_result.fluency_score)
             pro_bar = _make_progress_bar(eval_result.prosody_score or eval_result.accuracy_score)
 
-            # Desglose de palabras con IPA
+            # Desglose lineal compacto (1 línea por palabra con sus fonemas secuenciales)
             word_lines = []
             for w in eval_result.words:
-                icon = "✅" if w.score >= 75 else "⚠️"
-                phoneme_details = " ".join(
-                    [
-                        f"{p.phoneme}({p.score:.0f})" if p.score < 70 else p.phoneme
-                        for p in w.phonemes
-                    ]
-                )
-                word_lines.append(
-                    f"{icon} <b>{w.word}</b> [<code>{phoneme_details}</code>] ➔ <code>{w.score:.0f}%</code>"
-                )
+                if w.score >= 85 and not any(p.score < 70 for p in w.phonemes):
+                    word_lines.append(f"✅ <b>{w.word}</b> ➔ <code>{w.score:.0f}%</code>")
+                else:
+                    icon = "🟡" if w.score >= 65 else "🔴"
+                    p_parts = []
+                    for p in w.phonemes:
+                        if p.score >= 75:
+                            p_parts.append(p.phoneme)
+                        elif p.score >= 55:
+                            p_parts.append(f"🟡{p.phoneme}({p.score:.0f}%)")
+                        else:
+                            p_parts.append(f"🔴{p.phoneme}({p.score:.0f}%)")
+                    linear_phonemes = " · ".join(p_parts)
+                    word_lines.append(
+                        f"{icon} <b>{w.word}</b> [<code>{linear_phonemes}</code>] ➔ <code>{w.score:.0f}%</code>"
+                    )
 
             words_formatted = "\n".join(word_lines)
 
             # Aclaración amigable en español de los fonemas que fallaron
             clarifications = []
-            for wp in weak_phonemes[:3]:
+            for wp in set(weak_phonemes[:3]):
                 explanation = get_phoneme_explanation(wp, lang)
                 if explanation:
-                    clarifications.append(f"• <code>/{wp}/</code>: {explanation}")
+                    clarifications.append(f"• Sonido <code>/{wp}/</code>: {explanation}")
 
             clarif_section = ""
             if clarifications:
                 clarif_section = (
-                    "\n📖 <b>Guía de símbolos detectados:</b>\n" + "\n".join(clarifications) + "\n"
+                    "\n📖 <b>Guía de articulación (dónde colocar lengua/labios):</b>\n" + "\n".join(clarifications) + "\n"
                 )
 
             # Limpiar y sanitizar texto de Gemini para HTML
