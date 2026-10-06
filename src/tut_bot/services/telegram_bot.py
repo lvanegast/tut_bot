@@ -125,6 +125,53 @@ def get_phoneme_explanation(phoneme: str, language: str = "de-DE") -> str:
     return EXPLANATIONS.get(clean_p, "")
 
 
+def get_phoneme_friendly_label(phoneme: str, language: str = "de-DE") -> str:
+    """Devuelve la representación legible con letra común para que el usuario siempre identifique el sonido aunque su móvil no tenga la fuente IPA."""
+    clean_p = phoneme.replace("/", "").replace("[", "").replace("]", "").strip()
+    LABELS = {
+        # Alemán
+        "ʁ": "r gutural",
+        "ɐ": "-er final",
+        "ç": "ch suave",
+        "x": "ch velar",
+        "ʃ": "sh",
+        "øː": "ö larga",
+        "œ": "ö corta",
+        "yː": "ü larga",
+        "ʏ": "ü corta",
+        "ɛː": "ä abierta",
+        "ɛ": "e abierta",
+        "eː": "e larga",
+        "iː": "i larga",
+        "ɪ": "i corta",
+        "oː": "o larga",
+        "ɔ": "o corta",
+        "uː": "u larga",
+        "ʊ": "u corta",
+        "ə": "e relajada",
+        "ts": "z / ts",
+        "z": "s sonora",
+        "s": "s sorda",
+        "aɪ": "ei / ai",
+        "aʊ": "au",
+        "ɔʏ": "eu / äu",
+        # Inglés
+        "θ": "th sorda",
+        "ð": "th sonora",
+        "æ": "a abierta",
+        "ʌ": "u central",
+        "w": "w inglesa",
+        "v": "v labiodental",
+        "dʒ": "j suave",
+        "tʃ": "ch",
+        "ŋ": "ng",
+    }
+    label = LABELS.get(clean_p)
+    if label:
+        return f"'{label}' (/{clean_p}/)"
+    return f"/{clean_p}/"
+
+
 class TelegramCoachBot:
     """
     Bot interactivo de Telegram para tut_bot.
@@ -2175,7 +2222,7 @@ class TelegramCoachBot:
                             p_parts.append(f"🔴{p.phoneme}({p.score:.0f}%)")
                     linear_phonemes = " · ".join(p_parts)
                     word_lines.append(
-                        f"{icon} <b>{w.word}</b> [<code>{linear_phonemes}</code>] ➔ <code>{w.score:.0f}%</code>"
+                        f"{icon} <b>{w.word}</b> [{linear_phonemes}] ➔ <code>{w.score:.0f}%</code>"
                     )
 
             words_formatted = "\n".join(word_lines)
@@ -2184,8 +2231,9 @@ class TelegramCoachBot:
             clarifications = []
             for wp in set(weak_phonemes[:3]):
                 explanation = get_phoneme_explanation(wp, lang)
+                friendly_lbl = get_phoneme_friendly_label(wp, lang)
                 if explanation:
-                    clarifications.append(f"• Sonido <code>/{wp}/</code>: {explanation}")
+                    clarifications.append(f"• Sonido <b>{friendly_lbl}</b>: {explanation}")
 
             clarif_section = ""
             if clarifications:
