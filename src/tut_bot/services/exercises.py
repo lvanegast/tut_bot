@@ -760,9 +760,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="¡Buen día! Un café con leche, por favor.",
         tip="Identifica las palabras esenciales: 'Kaffee' (café) y 'Milch' (leche).",
         options=[
-            "Un café con leche (Kaffee mit Milch)",
-            "Un té con limón (Tee mit Zitrone)",
-            "Una botella de agua mineral (Wasser)",
+            "Kaffee mit Milch (Un café con leche)",
+            "Tee mit Zitrone (Un té con limón)",
+            "Mineralwasser (Una botella de agua mineral)",
         ],
         correct_option_index=0,
         vocabulary_breakdown={
@@ -785,9 +785,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="Hola, me llamo Carlos y vengo de España.",
         tip="Escucha la frase de origen: 'komme aus...' seguida del país.",
         options=[
-            "De España (aus Spanien)",
-            "De Alemania (aus Deutschland)",
-            "De México (aus Mexiko)",
+            "Aus Spanien (De España)",
+            "Aus Deutschland (De Alemania)",
+            "Aus Mexiko (De México)",
         ],
         correct_option_index=0,
         vocabulary_breakdown={
@@ -809,9 +809,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="El pan fresco cuesta dos euros.",
         tip="Concéntrate en el número básico 'zwei' (2) antes de 'Euro'.",
         options=[
-            "2,00 € (zwei Euro)",
-            "5,00 € (fünf Euro)",
-            "10,00 € (zehn Euro)",
+            "Zwei Euro (2,00 €)",
+            "Fünf Euro (5,00 €)",
+            "Zehn Euro (10,00 €)",
         ],
         correct_option_index=0,
         vocabulary_breakdown={
@@ -833,9 +833,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="El autobús llega exactamente a las ocho en punto.",
         tip="En nivel A1 las horas formales se dicen con 'um [número] Uhr'.",
         options=[
-            "A las 6:00 (um sechs Uhr)",
-            "A las 8:00 (um acht Uhr)",
-            "A las 10:00 (um zehn Uhr)",
+            "Um sechs Uhr (A las 6:00)",
+            "Um acht Uhr (A las 8:00)",
+            "Um zehn Uhr (A las 10:00)",
         ],
         correct_option_index=1,
         vocabulary_breakdown={
@@ -857,9 +857,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="Nuestro curso de alemán es el lunes.",
         tip="Los días de la semana en alemán van precedidos de 'am' (am Montag, am Dienstag...).",
         options=[
-            "El lunes (am Montag)",
-            "El miércoles (am Mittwoch)",
-            "El viernes (am Freitag)",
+            "Am Montag (El lunes)",
+            "Am Mittwoch (El miércoles)",
+            "Am Freitag (El viernes)",
         ],
         correct_option_index=0,
         vocabulary_breakdown={
@@ -883,9 +883,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="La reunión comienza a las ocho menos cuarto (7:45).",
         tip="Presta atención a 'Viertel vor' (un cuarto antes de...) vs 'Viertel nach'.",
         options=[
-            "7:45 (Viertel vor acht)",
-            "8:15 (Viertel nach acht)",
-            "8:45 (Viertel vor neun)",
+            "Viertel vor acht (7:45)",
+            "Viertel nach acht (8:15)",
+            "Viertel vor neun (8:45)",
         ],
         correct_option_index=0,
         vocabulary_breakdown={
@@ -907,9 +907,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="Maria trabaja como médica en un hospital grande.",
         tip="Escucha la palabra compuesta 'Krankenhaus' y la profesión 'Ärztin'.",
         options=[
-            "Es profesora en una universidad",
-            "Es médica en un hospital",
-            "Es abogada en una oficina",
+            "Lehrerin an einer Universität (Profesora en una universidad)",
+            "Ärztin in einem großen Krankenhaus (Médica en un hospital)",
+            "Anwältin in einem Büro (Abogada en una oficina)",
         ],
         correct_option_index=1,
         vocabulary_breakdown={
@@ -931,9 +931,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="El diccionario de alemán cuesta exactamente 19,50 euros.",
         tip="Distingue entre 'neunzehn' (19) y 'neunzig' (90).",
         options=[
-            "19,50 € (neunzehn Euro fünfzig)",
-            "90,15 € (neunzig Euro fünfzehn)",
-            "9,50 € (neun Euro fünfzig)",
+            "Neunzehn Euro fünfzig (19,50 €)",
+            "Neunzig Euro fünfzehn (90,15 €)",
+            "Neun Euro fünfzig (9,50 €)",
         ],
         correct_option_index=0,
         vocabulary_breakdown={
@@ -955,9 +955,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="El Intercity hacia Hamburgo sale hoy desde la vía 7.",
         tip="Identifica la palabra clave 'Gleis' (vía / andén) seguida del número.",
         options=[
-            "Vía 4 (Gleis vier)",
-            "Vía 7 (Gleis sieben)",
-            "Vía 11 (Gleis elf)",
+            "Gleis vier (Vía 4)",
+            "Gleis sieben (Vía 7)",
+            "Gleis elf (Vía 11)",
         ],
         correct_option_index=1,
         vocabulary_breakdown={
@@ -978,9 +978,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="Mañana brillará el sol y estará cálido con 23 grados.",
         tip="Escucha 'scheint die Sonne' (soleado) y el número 'dreiundzwanzig' (23).",
         options=[
-            "Lluvioso y frío con 13 grados",
-            "Soleado y cálido con 23 grados",
-            "Nublado y ventoso con 30 grados",
+            "Regnerisch und kalt mit 13 Grad (Lluvioso y frío con 13 grados)",
+            "Sonnig und warm mit 23 Grad (Soleado y cálido con 23 grados)",
+            "Bewölkt und windig mit 30 Grad (Nublado y ventoso con 30 grados)",
         ],
         correct_option_index=1,
         vocabulary_breakdown={
@@ -1002,9 +1002,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="Siga todo recto en el cruce y gire a la izquierda después de la oficina postal.",
         tip="Identifica 'geradeaus' (recto), 'links' (izquierda) y el punto de referencia 'nach der Post'.",
         options=[
-            "Girar a la derecha inmediatamente en el semáforo",
-            "Ir todo recto en el cruce y girar a la izquierda tras la oficina postal",
-            "Cruzar el parque y tomar el autobús",
+            "An der Ampel sofort rechts abbiegen (Girar a la derecha inmediatamente en el semáforo)",
+            "Geradeaus und nach der Post links abbiegen (Ir todo recto en el cruce y girar a la izquierda tras la oficina postal)",
+            "Durch den Park gehen und den Bus nehmen (Cruzar el parque y tomar el autobús)",
         ],
         correct_option_index=1,
         vocabulary_breakdown={
@@ -1026,9 +1026,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="Tome este jarabe para la tos tres veces al día después de comer.",
         tip="Escucha 'dreimal täglich' (tres veces al día) y 'nach dem Essen' (después de comer).",
         options=[
-            "Una vez al día antes de acostarse",
-            "Tres veces al día después de las comidas",
-            "Dos cucharadas cada hora",
+            "Einmal täglich vor dem Schlafen (Una vez al día antes de acostarse)",
+            "Dreimal täglich nach dem Essen (Tres veces al día después de las comidas)",
+            "Zwei Löffel jede Stunde (Dos cucharadas cada hora)",
         ],
         correct_option_index=1,
         vocabulary_breakdown={
@@ -1050,9 +1050,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="Nos gustaría pagar por separado y con tarjeta de crédito, por favor.",
         tip="'getrennt' significa cuentas separadas (muy común en Alemania).",
         options=[
-            "Pagar juntos y en efectivo",
-            "Pagar por separado y con tarjeta de crédito",
-            "Pedir el postre primero",
+            "Zusammen und bar zahlen (Pagar juntos y en efectivo)",
+            "Getrennt und mit Kreditkarte zahlen (Pagar por separado y con tarjeta de crédito)",
+            "Zuerst den Nachtisch bestellen (Pedir el postre primero)",
         ],
         correct_option_index=1,
         vocabulary_breakdown={
@@ -1073,9 +1073,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="Hola, habla el señor Schmidt. Lamentablemente debo posponer nuestra cita del jueves.",
         tip="'verschieben' significa aplazar o posponer una cita fijada.",
         options=[
-            "Para confirmar la llegada a la cita puntual",
-            "Para posponer la cita fijada para el jueves",
-            "Para cancelar el contrato definitivamente",
+            "Den Termin pünktlich bestätigen (Para confirmar la llegada a la cita puntual)",
+            "Den Termin am Donnerstag verschieben (Para posponer la cita fijada para el jueves)",
+            "Den Vertrag kündigen (Para cancelar el contrato definitivamente)",
         ],
         correct_option_index=1,
         vocabulary_breakdown={
@@ -1098,14 +1098,14 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="Para este puesto exigimos conocimientos de alemán a nivel de negociación, tanto oral como escrito.",
         tip="'verhandlungssicher' denota nivel fluido/profesional (B2-C1). 'voraussetzen' significa requerir de antemano.",
         options=[
-            "Disponibilidad de viajar los fines de semana",
-            "Alemán fluido profesional hablado y escrito",
-            "Tener vehículo propio",
+            "Reisebereitschaft am Wochenende (Disponibilidad de viajar los fines de semana)",
+            "Verhandlungssichere Deutschkenntnisse (Alemán fluido profesional hablado y escrito)",
+            "Ein eigenes Auto besitzen (Tener vehículo propio)",
         ],
         correct_option_index=1,
         vocabulary_breakdown={
             "voraussetzen": "exigir como requisito",
-            "verhandlungssicher": "con nivel de negociación / plenamente fluido",
+            "verhandlungssichere": "con nivel de negociación / plenamente fluido",
             "in Wort und Schrift": "hablado y escrito",
         },
     ),
@@ -1121,9 +1121,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="En la autopista A8 hay un atasco de diez kilómetros debido a obras en la calzada.",
         tip="'der Stau' es atasco/tráfico. 'die Baustelle' son obras de construcción.",
         options=[
-            "Un accidente grave entre dos camiones",
-            "Un atasco de 10 km ocasionado por obras viales",
-            "Cierre por tormenta de nieve intensa",
+            "Schwerer Unfall zwischen zwei LKWs (Un accidente grave entre dos camiones)",
+            "Zehn Kilometer Stau wegen Baustelle (Un atasco de 10 km ocasionado por obras viales)",
+            "Sperrung wegen starkem Schneefall (Cierre por tormenta de nieve intensa)",
         ],
         correct_option_index=1,
         vocabulary_breakdown={
@@ -1414,9 +1414,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="¿Me da un jugo de naranja y una botella de agua, por favor?",
         tip="Identifica las dos bebidas básicas: 'orange juice' y 'water'.",
         options=[
-            "Jugo de naranja y una botella de agua",
-            "Jugo de manzana y un café caliente",
-            "Té con leche y una galleta",
+            "Orange juice and a bottle of water (Jugo de naranja y una botella de agua)",
+            "Apple juice and hot coffee (Jugo de manzana y un café caliente)",
+            "Tea with milk and a cookie (Té con leche y una galleta)",
         ],
         correct_option_index=0,
         vocabulary_breakdown={
@@ -1437,9 +1437,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="Hola, mi nombre es David y soy de México.",
         tip="Escucha la frase de origen: 'from Mexico'.",
         options=[
-            "De México (from Mexico)",
-            "De Canadá (from Canada)",
-            "De España (from Spain)",
+            "From Mexico (De México)",
+            "From Canada (De Canadá)",
+            "From Spain (De España)",
         ],
         correct_option_index=0,
         vocabulary_breakdown={
@@ -1460,9 +1460,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="El sándwich de pollo cuesta cuatro dólares.",
         tip="Concéntrate en el número básico 'four' (4) antes de 'dollars'.",
         options=[
-            "$4 dólares (four dollars)",
-            "$14 dólares (fourteen dollars)",
-            "$40 dólares (forty dollars)",
+            "Four dollars ($4 dólares)",
+            "Fourteen dollars ($14 dólares)",
+            "Forty dollars ($40 dólares)",
         ],
         correct_option_index=0,
         vocabulary_breakdown={
@@ -1482,9 +1482,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="La película empieza a las siete en punto.",
         tip="En nivel A1 las horas exactas usan 'at [número] o'clock'.",
         options=[
-            "A las 5:00 (five o'clock)",
-            "A las 7:00 (seven o'clock)",
-            "A las 9:00 (nine o'clock)",
+            "At five o'clock (A las 5:00)",
+            "At seven o'clock (A las 7:00)",
+            "At nine o'clock (A las 9:00)",
         ],
         correct_option_index=1,
         vocabulary_breakdown={
@@ -1505,9 +1505,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="El museo de arte está abierto el sábado.",
         tip="Los días de la semana en inglés se acompañan de la preposición 'on'.",
         options=[
-            "El martes (on Tuesday)",
-            "El jueves (on Thursday)",
-            "El sábado (on Saturday)",
+            "On Tuesday (El martes)",
+            "On Thursday (El jueves)",
+            "On Saturday (El sábado)",
         ],
         correct_option_index=2,
         vocabulary_breakdown={
@@ -1530,9 +1530,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="Atención pasajeros, el vuelo 402 está cancelado debido a lluvia intensa.",
         tip="Identifica la expresión 'due to' (debido a) y la condición climática.",
         options=[
-            "Por lluvia intensa (heavy rain)",
-            "Por fallas mecánicas en el avión",
-            "Por huelga del personal del aeropuerto",
+            "Heavy rain (Por lluvia intensa)",
+            "Mechanical problems (Por fallas mecánicas en el avión)",
+            "Airport staff strike (Por huelga del personal del aeropuerto)",
         ],
         correct_option_index=0,
         vocabulary_breakdown={
@@ -1554,9 +1554,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="Quisiera un café helado grande con leche de almendras y sin azúcar, por favor.",
         tip="Escucha la palabra clave sobre la leche: 'almond milk'.",
         options=[
-            "Leche de vaca entera",
-            "Leche de avena (oat milk)",
-            "Leche de almendras (almond milk)",
+            "Whole milk (Leche de vaca entera)",
+            "Oat milk (Leche de avena)",
+            "Almond milk (Leche de almendras)",
         ],
         correct_option_index=2,
         vocabulary_breakdown={
@@ -1577,9 +1577,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="¡Buenos días! El desayuno se sirve en el comedor principal de 7:00 a 10:30.",
         tip="'until ten thirty' indica el límite de horario.",
         options=[
-            "A las 9:00",
-            "A las 10:00",
-            "A las 10:30 (ten thirty)",
+            "At 9:00 (A las 9:00)",
+            "At 10:00 (A las 10:00)",
+            "At 10:30 (A las 10:30 - ten thirty)",
         ],
         correct_option_index=2,
         vocabulary_breakdown={
@@ -1601,9 +1601,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="Toma una pastilla cada ocho horas con un vaso lleno de agua después de las comidas.",
         tip="Escucha el intervalo de tiempo: 'every eight hours'.",
         options=[
-            "Cada 8 horas después de las comidas",
-            "Cada 12 horas en ayunas",
-            "Únicamente antes de dormir",
+            "Every eight hours after meals (Cada 8 horas después de las comidas)",
+            "Every 12 hours on an empty stomach (Cada 12 horas en ayunas)",
+            "Only before bedtime (Únicamente antes de dormir)",
         ],
         correct_option_index=0,
         vocabulary_breakdown={
@@ -1625,9 +1625,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="El tren con destino a Chicago ha sido demorado veinticinco minutos debido a tareas de mantenimiento.",
         tip="'twenty-five minutes' indica el tiempo exacto de demora.",
         options=[
-            "15 minutos",
-            "25 minutos",
-            "45 minutos",
+            "15 minutes (15 minutos)",
+            "25 minutes (25 minutos)",
+            "45 minutes (45 minutos)",
         ],
         correct_option_index=1,
         vocabulary_breakdown={
@@ -1648,9 +1648,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="Puedes devolver cualquier artículo comprado dentro de los 30 días siempre que tengas el recibo original.",
         tip="'as long as' significa 'siempre que' o 'a condición de'. 'receipt' es el recibo.",
         options=[
-            "La etiqueta de garantía de fábrica",
-            "El recibo original de compra (original receipt)",
-            "Pagar una tarifa de reposición",
+            "Factory warranty tag (La etiqueta de garantía de fábrica)",
+            "Original receipt (El recibo original de compra)",
+            "Restocking fee (Pagar una tarifa de reposición)",
         ],
         correct_option_index=1,
         vocabulary_breakdown={
@@ -1674,9 +1674,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="Dado que el cliente solicitó funciones adicionales, hemos trasladado la fecha límite de lanzamiento final al próximo viernes.",
         tip="Presta atención a la nueva fecha: 'next Friday' (el próximo viernes).",
         options=[
-            "Se canceló el proyecto",
-            "Se mantuvo para este miércoles",
-            "Se postergó al próximo viernes (next Friday)",
+            "Project was cancelled (Se canceló el proyecto)",
+            "Kept for this Wednesday (Se mantuvo para este miércoles)",
+            "Postponed to next Friday (Se postergó al próximo viernes)",
         ],
         correct_option_index=2,
         vocabulary_breakdown={
@@ -1698,9 +1698,9 @@ EXERCISES_DATABASE: List[Exercise] = [
         translation_es="La última actualización del sistema optimiza el procesamiento en segundo plano y prolonga la duración total de la batería en un 20%.",
         tip="Identifica el beneficio específico: extender la vida útil de la batería en un 20%.",
         options=[
-            "Aumenta la memoria RAM en 50%",
-            "Extiende la duración de la batería un 20%",
-            "Reduce el tamaño de la pantalla",
+            "Increases RAM by 50% (Aumenta la memoria RAM en 50%)",
+            "Extends battery life by 20% (Extiende la duración de la batería un 20%)",
+            "Reduces screen size (Reduce el tamaño de la pantalla)",
         ],
         correct_option_index=1,
         vocabulary_breakdown={
