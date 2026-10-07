@@ -407,6 +407,8 @@ class ProgressTracker:
                         unit_num = int(unit_to_mark.replace("unit_", ""))
                     except ValueError:
                         unit_num = 1
+                elif unit_to_mark.isdigit():
+                    unit_num = int(unit_to_mark)
                 next_unit_num = unit_num + 1
                 next_unit_id = f"unit_{next_unit_num}" if next_unit_num <= total_units else None
 
@@ -520,6 +522,13 @@ class ProgressTracker:
         """Fija la unidad temática activa del usuario y reinicia el índice del ejercicio."""
         self.get_user_state(user_id)
         now = datetime.now(timezone.utc).isoformat()
+        norm_unit = str(unit_id).strip()
+        if norm_unit.startswith("sel_"):
+            norm_unit = norm_unit[len("sel_"):]
+        if norm_unit.isdigit():
+            norm_unit = f"unit_{norm_unit}"
+        elif norm_unit != "all" and not norm_unit.startswith("unit_"):
+            norm_unit = f"unit_{norm_unit}"
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -528,7 +537,7 @@ class ProgressTracker:
                 SET active_unit = ?, exercise_index = 0, fsm_state = 'IN_EXERCISE', custom_phrase = NULL, updated_at = ?
                 WHERE user_id = ?
                 """,
-                (unit_id, now, user_id),
+                (norm_unit, now, user_id),
             )
             conn.commit()
 

@@ -116,8 +116,16 @@ def list_exercises(
     language: Optional[str] = "de-DE",
     category: Optional[str] = None,
     level: Optional[str] = None,
+    skill_type: Optional[str] = None,
+    unit_id: Optional[str] = None,
 ):
-    return get_exercises(language=language, category=category, level=level)
+    return get_exercises(
+        language=language,
+        category=category,
+        level=level,
+        skill_type=skill_type,
+        unit_id=unit_id,
+    )
 
 
 @app.get("/api/categories")

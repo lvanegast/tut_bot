@@ -498,13 +498,13 @@ class TelegramCoachBot:
         for u in units:
             prefix = "🔘 " if active_unit == u.id else ""
             btn_text = f"{prefix}{u.icon} U{u.number}: {u.title_es}"
-            buttons.append([InlineKeyboardButton(btn_text, callback_data=f"unit_{u.id}")])
+            buttons.append([InlineKeyboardButton(btn_text, callback_data=f"unit_sel_{u.id}")])
 
         prefix_all = "🔘 " if active_unit == "all" else ""
         buttons.append(
             [
                 InlineKeyboardButton(
-                    f"{prefix_all}🌐 Todas las Unidades", callback_data="unit_all"
+                    f"{prefix_all}🌐 Todas las Unidades", callback_data="unit_sel_all"
                 )
             ]
         )
@@ -1428,8 +1428,23 @@ class TelegramCoachBot:
         elif data == "btn_units_menu":
             await self.cmd_units(update, context)
 
-        elif data.startswith("unit_"):
-            new_unit = data.replace("unit_", "")
+        elif data.startswith("unit_sel_") or data.startswith("unit_"):
+            raw = (
+                data[len("unit_sel_") :]
+                if data.startswith("unit_sel_")
+                else data[len("unit_") :]
+            )
+            if raw.startswith("sel_"):
+                raw = raw[len("sel_") :]
+            if raw.isdigit():
+                new_unit = f"unit_{raw}"
+            elif raw == "all":
+                new_unit = "all"
+            elif raw.startswith("unit_"):
+                new_unit = raw
+            else:
+                new_unit = f"unit_{raw}"
+
             tracker.set_user_unit(user_id, new_unit)
             state = tracker.get_user_state(user_id)
             if new_unit == "all":
@@ -1562,11 +1577,19 @@ class TelegramCoachBot:
         elif data.startswith("listen_opt_"):
             chosen_idx = int(data.replace("listen_opt_", ""))
             state = tracker.get_user_state(user_id)
+            active_unit = state.get("active_unit", "all")
             exercises = get_exercises(
                 language=state["language"],
                 level=state.get("level", "A1"),
                 skill_type="listening",
+                unit_id=active_unit,
             )
+            if not exercises:
+                exercises = get_exercises(
+                    language=state["language"],
+                    level=state.get("level", "A1"),
+                    skill_type="listening",
+                )
             if not exercises:
                 exercises = get_exercises(language=state["language"])
             idx = state["exercise_index"] % len(exercises)
@@ -1669,11 +1692,19 @@ class TelegramCoachBot:
 
         elif data == "ex_prev":
             state = tracker.get_user_state(user_id)
+            active_unit = state.get("active_unit", "all")
             exercises = get_exercises(
                 language=state["language"],
                 level=state.get("level", "A1"),
                 skill_type=state.get("skill_mode", "speaking"),
+                unit_id=active_unit,
             )
+            if not exercises:
+                exercises = get_exercises(
+                    language=state["language"],
+                    level=state.get("level", "A1"),
+                    skill_type=state.get("skill_mode", "speaking"),
+                )
             if not exercises:
                 exercises = get_exercises(language=state["language"])
             prev_idx = max(0, state["exercise_index"] - 1)
@@ -1710,6 +1741,7 @@ class TelegramCoachBot:
         """Sintetiza la voz nativa y la envía como nota de voz a Telegram (con opción de audio lento)."""
         state = tracker.get_user_state(user_id)
         lang = state["language"]
+        active_unit = state.get("active_unit", "all")
 
         actual_id = data.replace("tts_slow_", "").replace("tts_", "")
         if actual_id == "custom" and state.get("custom_phrase"):
@@ -1719,7 +1751,14 @@ class TelegramCoachBot:
                 language=lang,
                 level=state.get("level", "A1"),
                 skill_type=state.get("skill_mode", "speaking"),
+                unit_id=active_unit,
             )
+            if not exercises:
+                exercises = get_exercises(
+                    language=lang,
+                    level=state.get("level", "A1"),
+                    skill_type=state.get("skill_mode", "speaking"),
+                )
             if not exercises:
                 exercises = get_exercises(language=lang)
             # Buscar por ID si está especificado
@@ -1818,9 +1857,15 @@ class TelegramCoachBot:
             await self._handle_conversation_turn(update, user_id, user_text=text, is_audio=False)
             return
 
+        active_unit = state.get("active_unit", "all")
+
         # 2. Modo ESCRITURA: Evaluar la respuesta del alumno
         if skill_mode == "writing":
-            exercises = get_exercises(language=lang, level=level, skill_type="writing")
+            exercises = get_exercises(
+                language=lang, level=level, skill_type="writing", unit_id=active_unit
+            )
+            if not exercises:
+                exercises = get_exercises(language=lang, level=level, skill_type="writing")
             if not exercises:
                 exercises = get_exercises(language=lang, skill_type="writing")
             if not exercises:
@@ -1898,7 +1943,11 @@ class TelegramCoachBot:
 
         # 3. Modo COMPRENSIÓN (Listening): Evaluar lo que respondió por texto
         if skill_mode == "listening":
-            exercises = get_exercises(language=lang, level=level, skill_type="listening")
+            exercises = get_exercises(
+                language=lang, level=level, skill_type="listening", unit_id=active_unit
+            )
+            if not exercises:
+                exercises = get_exercises(language=lang, level=level, skill_type="listening")
             if not exercises:
                 exercises = get_exercises(language=lang)
             idx = state["exercise_index"] % len(exercises)
@@ -2107,6 +2156,7 @@ class TelegramCoachBot:
                         pass
             return
 
+        active_unit = state.get("active_unit", "all")
         if state.get("custom_phrase"):
             reference_text = state["custom_phrase"]
             is_custom = True
@@ -2115,7 +2165,14 @@ class TelegramCoachBot:
                 language=lang,
                 level=state.get("level", "A1"),
                 skill_type=state.get("skill_mode", "speaking"),
+                unit_id=active_unit,
             )
+            if not exercises:
+                exercises = get_exercises(
+                    language=lang,
+                    level=state.get("level", "A1"),
+                    skill_type=state.get("skill_mode", "speaking"),
+                )
             if not exercises:
                 exercises = get_exercises(language=lang)
             idx = state["exercise_index"] % len(exercises)

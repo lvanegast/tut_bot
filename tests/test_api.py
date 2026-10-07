@@ -474,6 +474,42 @@ def test_conversation_roleplay_service():
     assert final_state["fsm_state"] == "CONVERSATION_SUMMARY"
 
 
+def test_all_units_have_distinct_exercises_and_no_unwanted_repetition():
+    from tut_bot.services.exercises import get_exercises
+    from tut_bot.services.tracker import tracker
+
+    test_user = "test_unit_repetition_check"
+
+    # Verificar que las 6 unidades de A1 en de-DE y en-US tienen ejercicios propios
+    for lang in ["de-DE", "en-US"]:
+        for skill in ["speaking", "listening", "writing"]:
+            seen_texts = set()
+            for u in [f"unit_{i}" for i in range(1, 7)]:
+                # 1. Probar fijación de unidad en tracker (con y sin prefijos)
+                tracker.set_user_unit(test_user, u)
+                st = tracker.get_user_state(test_user)
+                assert st["active_unit"] == u, f"Fallo al fijar unidad {u}: {st['active_unit']}"
+
+                # 2. Obtener ejercicios de la unidad
+                unit_exs = get_exercises(language=lang, level="A1", skill_type=skill, unit_id=u)
+                assert len(unit_exs) >= 2, f"Unidad {u} en {lang} [{skill}] debe tener al menos 2 ejercicios, tiene {len(unit_exs)}"
+
+                # 3. Comprobar que los ejercicios de cada unidad son distintos y no repiten la frase de la Unidad 1
+                first_text = unit_exs[0].target_text
+                assert first_text not in seen_texts, f"Frase repetida detectada entre unidades: '{first_text}' en {u}"
+                seen_texts.add(first_text)
+
+    # 4. Probar normalización defensiva: pasar "3", "sel_3" o "unit_3" debe guardar "unit_3"
+    tracker.set_user_unit(test_user, "3")
+    assert tracker.get_user_state(test_user)["active_unit"] == "unit_3"
+
+    tracker.set_user_unit(test_user, "sel_4")
+    assert tracker.get_user_state(test_user)["active_unit"] == "unit_4"
+
+    tracker.set_user_unit(test_user, "all")
+    assert tracker.get_user_state(test_user)["active_unit"] == "all"
+
+
 if __name__ == "__main__":
     test_health_endpoint()
     test_exercises_endpoints()
@@ -489,5 +525,6 @@ if __name__ == "__main__":
     test_fsm_progression_and_level_graduation()
     test_curriculum_and_vocabulary_tracking()
     test_conversation_roleplay_service()
+    test_all_units_have_distinct_exercises_and_no_unwanted_repetition()
     print("\n[EXITO] Todas las pruebas unitarias pasaron correctamente!")
 
