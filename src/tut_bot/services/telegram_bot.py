@@ -34,6 +34,7 @@ from tut_bot.services.curriculum import (
     get_unit_by_id,
 )
 from tut_bot.services.exercises import get_exercises
+from tut_bot.services.final_exam import get_level_exam
 from tut_bot.services.gemini_coach import gemini_coach
 from tut_bot.services.tracker import tracker
 
@@ -275,6 +276,11 @@ class TelegramCoachBot:
         app.add_handler(
             CommandHandler(
                 ["tema", "temas", "unidad", "unidades", "modulo", "modulos"], self.cmd_units
+            )
+        )
+        app.add_handler(
+            CommandHandler(
+                ["examen", "evaluacion", "test", "certificacion"], self.cmd_exam
             )
         )
         app.add_handler(CommandHandler(["libre", "custom", "fraselibre"], self.cmd_custom_phrase))
@@ -596,12 +602,15 @@ class TelegramCoachBot:
         info: Dict[str, Any],
         edit_message: bool = False,
     ):
-        """Muestra la tarjeta de graduación de nivel CEFR y opciones de progresión."""
+        """Muestra la tarjeta de culminación de serie y orienta a la evaluación o a temas pendientes."""
         state = tracker.get_user_state(user_id)
         lang = info.get("language") or state["language"]
         level = info.get("level") or state.get("level", "A1")
         skill = info.get("skill_mode") or state.get("skill_mode", "speaking")
-        next_level = info.get("next_level") or ("A2" if level == "A1" else ("B1" if level == "A2" else None))
+        next_level = "A2" if level == "A1" else ("B1" if level == "A2" else None)
+
+        unlocked = state.get("unlocked_levels", ["A1"])
+        req = tracker.can_take_final_exam(user_id, lang, level)
 
         lang_name = "🇩🇪 Alemán" if lang.startswith("de") else "🇺🇸 Inglés"
         skill_names = {
@@ -613,20 +622,28 @@ class TelegramCoachBot:
 
         lines = [
             "🏆 <b>¡SERIE DE EJERCICIOS COMPLETADA!</b> 🏆\n",
-            f"Has completado con éxito la serie de <b>{skill_name}</b> en nivel <b>{level}</b> ({lang_name}).",
-            "🎉 <i>Tu logro ha sido registrado en tu historial de aprendizaje.</i>\n",
-            f"💡 <i>Nota sobre vocabulario: Para dominar las ~650 palabras de la meta oficial {level}, continúa explorando las 6 Unidades Temáticas con /temas y practicando las demás habilidades (Escribir, Escuchar y Conversar).</i>\n",
+            f"Has completado la serie de <b>{skill_name}</b> en nivel <b>{level}</b> ({lang_name}).",
+            "🎉 <i>Tus ejercicios han sido registrados en tu historial.</i>\n",
         ]
 
         keyboard = []
-        if next_level:
-            lines.append(f"🚀 <b>¡Has desbloqueado el nivel {next_level}!</b>")
-            lines.append(f"Puedes ascender ahora a {next_level} o continuar consolidando otras habilidades.")
+        if next_level in unlocked:
+            lines.append(f"🚀 <b>¡Ya tienes certificado y desbloqueado el Nivel {next_level}!</b>")
             keyboard.append([
-                InlineKeyboardButton(f"🚀 Ascender a Nivel {next_level}", callback_data=f"fsm_ascend_{next_level}")
+                InlineKeyboardButton(f"🚀 Ir a Nivel {next_level}", callback_data=f"fsm_ascend_{next_level}")
+            ])
+        elif req["can_take"]:
+            lines.append("🎓 <b>¡Tienes las 6 unidades oficiales completadas!</b>")
+            lines.append(f"Para ascender a {next_level}, rinde la Evaluación Final Oficial:")
+            keyboard.append([
+                InlineKeyboardButton(f"📝 Rendir Evaluación Final {level}", callback_data=f"exam_start_{level}")
             ])
         else:
-            lines.append("🌟 <b>¡Has alcanzado el nivel máximo disponible en este curso!</b>")
+            lines.append(f"📊 <b>Progreso de Temas en Nivel {level}:</b> {req['completed_count']} / {req['total_units']} unidades aprobadas.")
+            lines.append(f"<i>Para desbloquear el Nivel {next_level}, debes completar los temas pendientes y aprobar la Evaluación Final.</i>")
+            keyboard.append([
+                InlineKeyboardButton("📂 Ver Temas Pendientes", callback_data="btn_units_menu")
+            ])
 
         keyboard.extend([
             [
@@ -638,6 +655,211 @@ class TelegramCoachBot:
                 InlineKeyboardButton("🏠 Menú Principal", callback_data="btn_start_menu"),
             ],
         ])
+
+        msg_text = "\n".join(lines)
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        if edit_message and update.callback_query:
+            try:
+                await self._safe_edit_text(update.callback_query, msg_text, reply_markup=reply_markup)
+            except Exception:
+                await self._safe_send_chat_message(update.effective_chat, msg_text, reply_markup=reply_markup)
+        else:
+            await self._safe_send_chat_message(update.effective_chat, msg_text, reply_markup=reply_markup)
+
+    async def _send_ready_for_exam_card(
+        self,
+        update: Update,
+        user_id: str,
+        info: Dict[str, Any],
+        edit_message: bool = False,
+    ):
+        """Muestra la tarjeta de habilitación de examen al culminar las 6 unidades temáticas oficiales."""
+        state = tracker.get_user_state(user_id)
+        lang = info.get("language") or state["language"]
+        level = info.get("level") or state.get("level", "A1")
+        next_level = info.get("next_level") or ("A2" if level == "A1" else ("B1" if level == "A2" else None))
+        lang_name = "🇩🇪 Alemán" if lang.startswith("de") else "🇺🇸 Inglés"
+        exam_name = "Goethe Start Deutsch 1" if lang.startswith("de") else "Cambridge A1 Key"
+
+        lines = [
+            f"🎓 <b>¡HAS COMPLETADO LOS 6 TEMAS DE NIVEL {level}!</b> 🎓\n",
+            f"Has cubierto con éxito todas las 6 Unidades Temáticas oficiales de <b>{level}</b> ({lang_name}).",
+            "<i>Inventario cubierto: ~650 palabras de alta frecuencia.</i>\n",
+            "🛡️ <b>Requisito de Certificación de Nivel:</b>",
+            f"Para certificar tus conocimientos y desbloquear formalmente el <b>Nivel {next_level}</b>, debes aprobar la <b>Evaluación Final Oficial {level}</b> ({exam_name}).\n",
+            "📋 <b>Estructura de la Evaluación:</b>",
+            "• Comprensión Auditiva (Hören) con audio nativo",
+            "• Comprensión de Lectura (Lesen)",
+            "• Estructura y Gramática clave",
+            "• Expresión Escrita (Schreiben)",
+            "• Pronunciación y Fluidez (Sprechen)\n",
+            "Nota mínima de aprobación: <b>75%</b>.",
+        ]
+
+        keyboard = [
+            [
+                InlineKeyboardButton(f"📝 Iniciar Evaluación Final {level}", callback_data=f"exam_start_{level}")
+            ],
+            [
+                InlineKeyboardButton("🔄 Repasar Unidades", callback_data="btn_units_menu"),
+                InlineKeyboardButton("🎯 Cambiar Modo", callback_data="btn_mode_menu"),
+            ],
+            [
+                InlineKeyboardButton("📊 Mis Estadísticas", callback_data="btn_stats"),
+                InlineKeyboardButton("🏠 Menú Principal", callback_data="btn_start_menu"),
+            ],
+        ]
+
+        msg_text = "\n".join(lines)
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        if edit_message and update.callback_query:
+            try:
+                await self._safe_edit_text(update.callback_query, msg_text, reply_markup=reply_markup)
+            except Exception:
+                await self._safe_send_chat_message(update.effective_chat, msg_text, reply_markup=reply_markup)
+        else:
+            await self._safe_send_chat_message(update.effective_chat, msg_text, reply_markup=reply_markup)
+
+    async def cmd_exam(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Inicia o verifica el estado de la Evaluación Final de Nivel oficial."""
+        user_id = f"tg_{update.effective_user.id}"
+        state = tracker.get_user_state(user_id)
+        lang = state["language"]
+        level = state.get("level", "A1")
+
+        req = tracker.can_take_final_exam(user_id, lang, level)
+        if not req["can_take"]:
+            lang_name = "🇩🇪 Alemán" if lang.startswith("de") else "🇺🇸 Inglés"
+            msg = (
+                f"🔒 <b>Evaluación Final {level} ({lang_name}) no disponible aún</b>\n\n"
+                f"Para rendir la Evaluación Final y poder ascender al siguiente nivel, debes completar las <b>6 Unidades Temáticas oficiales</b> de {level}.\n\n"
+                f"📊 <b>Tu progreso actual:</b>\n"
+                f"• Unidades completadas: <b>{req['completed_count']} / {req['total_units']}</b>\n"
+                f"• Temas pendientes: <i>{', '.join(req['missing_units'])}</i>\n\n"
+                f"💡 <i>Continúa practicando los temas pendientes con /temas o /ejercicio para desbloquear tu examen de graduación.</i>"
+            )
+            keyboard = [
+                [InlineKeyboardButton("📂 Ver Unidades Temáticas", callback_data="btn_units_menu")],
+                [InlineKeyboardButton("📚 Ir al Ejercicio", callback_data="btn_exercise")],
+            ]
+            await self._safe_reply_text(update.effective_message, msg, reply_markup=InlineKeyboardMarkup(keyboard))
+            return
+
+        exam_session = tracker.start_final_exam(user_id, lang, level)
+        if not exam_session:
+            await self._safe_reply_text(update.effective_message, "⚠️ No se encontró examen disponible para este nivel.")
+            return
+
+        await self._send_exam_question_card(update, user_id, exam_session, edit_message=False)
+
+    async def _send_exam_question_card(
+        self,
+        update: Update,
+        user_id: str,
+        exam_session: Dict[str, Any],
+        edit_message: bool = False,
+    ):
+        q = exam_session.get("current_question")
+        if not q:
+            return
+
+        q_idx = exam_session.get("current_index", 0) + 1
+        total_q = exam_session.get("total_questions", 6)
+        level = exam_session.get("level", "A1")
+
+        bar = _make_progress_bar((q_idx / total_q) * 100.0)
+
+        lines = [
+            f"📝 <b>EVALUACIÓN FINAL DE NIVEL {level}</b>",
+            f"<code>[{bar}]</code> Pregunta <b>{q_idx} de {total_q}</b> — <i>{q.section_name_es}</i>\n",
+            f"🎯 <b>Consigna:</b> {q.prompt_es}\n",
+        ]
+
+        if q.context_text:
+            lines.append(f"📖 <b>Texto de Lectura:</b>\n<i>\"{q.context_text}\"</i>\n")
+
+        if q.question_text:
+            lines.append(f"❓ <b>{q.question_text}</b>\n")
+
+        keyboard = []
+
+        if q.audio_text:
+            keyboard.append([
+                InlineKeyboardButton("🔊 Escuchar Audio", callback_data=f"exam_tts_{q.id}"),
+                InlineKeyboardButton("🐢 Escuchar Lento", callback_data=f"exam_ttsslow_{q.id}"),
+            ])
+
+        if q.options:
+            for idx, opt in enumerate(q.options):
+                keyboard.append([
+                    InlineKeyboardButton(f"{chr(65 + idx)}) {opt}", callback_data=f"exam_opt_{idx}")
+                ])
+        elif q.section == "schreiben":
+            lines.append("✍️ <i>Escribe tu respuesta como mensaje de texto a continuación:</i>")
+        elif q.section == "sprechen":
+            lines.append(f"👉 Frase: <b>\"{q.target_answer}\"</b>\n🎙️ <i>Graba y envía una nota de voz pronunciando la frase indicada.</i>")
+
+        keyboard.append([
+            [InlineKeyboardButton("❌ Cancelar Examen", callback_data="exam_cancel")],
+        ])
+
+        msg_text = "\n".join(lines)
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        if edit_message and update.callback_query:
+            try:
+                await self._safe_edit_text(update.callback_query, msg_text, reply_markup=reply_markup)
+            except Exception:
+                await self._safe_send_chat_message(update.effective_chat, msg_text, reply_markup=reply_markup)
+        else:
+            await self._safe_send_chat_message(update.effective_chat, msg_text, reply_markup=reply_markup)
+
+    async def _send_exam_result_card(
+        self,
+        update: Update,
+        user_id: str,
+        result: Dict[str, Any],
+        edit_message: bool = False,
+    ):
+        is_passed = result.get("is_passed", False)
+        score = result.get("score_percent", 0.0)
+        passing_score = result.get("passing_score", 75.0)
+        level = result.get("level", "A1")
+        next_level = result.get("next_level")
+
+        if is_passed:
+            lines = [
+                f"🎓 <b>¡FELICITACIONES! HAS APROBADO LA EVALUACIÓN FINAL DE NIVEL {level}</b> 🎓\n",
+                f"Puntuación obtenida: <b>{score:.1f}%</b> (Mínimo requerido: {passing_score:.0f}%)\n",
+                "🏆 <b>Certificación Oficial Otorgada</b>",
+                f"Has demostrado un dominio integral de las 6 unidades temáticas oficiales de {level}.\n",
+            ]
+            keyboard = []
+            if next_level:
+                lines.append(f"🚀 <b>¡Nivel {next_level} Desbloqueado con Éxito!</b>")
+                lines.append(f"Ya puedes comenzar el programa curricular de Nivel {next_level}.")
+                keyboard.append([
+                    InlineKeyboardButton(f"🚀 Comenzar Nivel {next_level}", callback_data=f"fsm_ascend_{next_level}")
+                ])
+            keyboard.extend([
+                [InlineKeyboardButton("📊 Ver Mis Estadísticas", callback_data="btn_stats")],
+                [InlineKeyboardButton("🏠 Menú Principal", callback_data="btn_start_menu")],
+            ])
+        else:
+            lines = [
+                f"🟡 <b>RESULTADO DE LA EVALUACIÓN FINAL {level}</b>\n",
+                f"Puntuación obtenida: <b>{score:.1f}%</b> (Mínimo para aprobar: {passing_score:.0f}%)\n",
+                "Estuviste cerca, pero necesitas reforzar algunos conceptos antes de obtener la certificación.\n",
+                "💡 <b>Recomendación Pedagógica:</b>",
+                "Repasa las Unidades Temáticas con /temas y vuelve a intentar la evaluación cuando te sientas listo.",
+            ]
+            keyboard = [
+                [InlineKeyboardButton(f"🔄 Reintentar Examen {level}", callback_data=f"exam_start_{level}")],
+                [InlineKeyboardButton("📂 Repasar Unidades Temáticas", callback_data="btn_units_menu")],
+                [InlineKeyboardButton("📚 Ir a Ejercicios", callback_data="btn_exercise")],
+            ]
 
         msg_text = "\n".join(lines)
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -905,15 +1127,7 @@ class TelegramCoachBot:
             f"<i>(Intercambio {user_turn_count})</i>"
         )
 
-        is_completed = (
-            reply_data.get("mission_status") == "goal_achieved"
-            or user_turn_count >= 5
-        )
-
-        if is_completed:
-            await self._safe_reply_text(update.effective_message, msg)
-            await self._finish_conversation_mission(update, user_id, scen)
-            return
+        is_goal_achieved = reply_data.get("mission_status") == "goal_achieved"
 
         keyboard = [
             [
@@ -926,14 +1140,27 @@ class TelegramCoachBot:
                     callback_data=f"conv_tts_slowrep_{user_turn_count}",
                 ),
             ],
-            [
-                InlineKeyboardButton("🏁 Concluir Misión", callback_data="conv_finish"),
-                InlineKeyboardButton("🔄 Reiniciar", callback_data="conv_restart"),
-            ],
-            [
-                InlineKeyboardButton("🎯 Cambiar Modo", callback_data="btn_mode_menu"),
-            ],
         ]
+
+        if is_goal_achieved:
+            msg = (
+                f"🎉 <b>¡Misión conversacional completada!</b>\n\n"
+                + msg
+                + "\n\n<i>Has cubierto el objetivo de la escena. Puedes revisar tu debriefing pedagógico o continuar charlando libremente:</i>"
+            )
+            keyboard.append([
+                InlineKeyboardButton("🏆 Ver Informe y Evaluación", callback_data="conv_finish"),
+                InlineKeyboardButton("🔄 Reiniciar Escenario", callback_data="conv_restart"),
+            ])
+        else:
+            keyboard.append([
+                InlineKeyboardButton("🏁 Finalizar Misión", callback_data="conv_finish"),
+                InlineKeyboardButton("🔄 Reiniciar", callback_data="conv_restart"),
+            ])
+
+        keyboard.append([
+            InlineKeyboardButton("🎯 Cambiar Modo", callback_data="btn_mode_menu"),
+        ])
         await self._safe_reply_text(
             update.effective_message,
             msg,
@@ -1505,15 +1732,101 @@ class TelegramCoachBot:
             state = tracker.get_user_state(user_id)
             unlocked = state.get("unlocked_levels", ["A1"])
             if new_level not in unlocked:
+                # Explicar claramente los requisitos
+                exam_req = tracker.can_take_final_exam(user_id, state["language"], "A1")
+                if not exam_req["can_take"]:
+                    await query.answer(
+                        f"🔒 Nivel {new_level} bloqueado: Completa las 6 unidades de A1 (llevas {exam_req['completed_count']}/6) para habilitar el examen.",
+                        show_alert=True,
+                    )
+                else:
+                    await query.answer(
+                        f"🔒 Nivel {new_level} bloqueado: Has completado las 6 unidades de A1, pero debes aprobar la Evaluación Final para certificar y desbloquear {new_level}.",
+                        show_alert=True,
+                    )
+                return
+            success = tracker.set_user_level(user_id, new_level)
+            if success:
+                await self._safe_edit_text(
+                    query, f"✅ Nivel de dificultad cambiado a: <b>{new_level}</b>."
+                )
+                await self._send_exercise_card(update, user_id, edit_message=False)
+
+        elif data.startswith("exam_start_"):
+            target_lvl = data.replace("exam_start_", "")
+            req = tracker.can_take_final_exam(user_id, state["language"], target_lvl)
+            if not req["can_take"]:
                 await query.answer(
-                    f"🔒 El nivel {new_level} está bloqueado. Completa los niveles previos para desbloquearlo.",
+                    f"🔒 Completa las 6 unidades de {target_lvl} (llevas {req['completed_count']}/6) antes de rendir el examen.",
                     show_alert=True,
                 )
                 return
-            tracker.set_user_level(user_id, new_level)
-            await self._safe_edit_text(
-                query, f"✅ Nivel de dificultad cambiado a: <b>{new_level}</b>."
+            exam_session = tracker.start_final_exam(user_id, state["language"], target_lvl)
+            if exam_session:
+                await self._send_exam_question_card(update, user_id, exam_session, edit_message=True)
+
+        elif data.startswith("exam_opt_"):
+            opt_idx = int(data.replace("exam_opt_", ""))
+            active_exam = tracker.get_active_final_exam(user_id)
+            if not active_exam:
+                await query.answer("No hay examen activo.", show_alert=True)
+                return
+            exam_obj = get_level_exam(active_exam["language"], active_exam["level"])
+            if not exam_obj:
+                return
+            curr_q_idx = active_exam["current_question_index"]
+            q = exam_obj.questions[curr_q_idx]
+
+            is_correct = (opt_idx == q.correct_option_index)
+            score_pts = float(q.points) if is_correct else 0.0
+            user_ans = q.options[opt_idx] if opt_idx < len(q.options) else str(opt_idx)
+
+            res = tracker.submit_exam_answer(
+                user_id=user_id,
+                question_id=q.id,
+                section=q.section,
+                user_answer=user_ans,
+                is_correct=is_correct,
+                score_points=score_pts,
+                explanation=q.explanation_es,
             )
+
+            feedback_icon = "✅ Correcto" if is_correct else "❌ Incorrecto"
+            await query.answer(f"{feedback_icon}: {q.explanation_es}", show_alert=True)
+
+            if res.get("status") == "next_question":
+                active_session = {
+                    "level": active_exam["level"],
+                    "language": active_exam["language"],
+                    "total_questions": len(exam_obj.questions),
+                    "current_index": res["current_index"],
+                    "current_question": res["current_question"],
+                }
+                await self._send_exam_question_card(update, user_id, active_session, edit_message=True)
+            elif res.get("status") == "exam_completed":
+                await self._send_exam_result_card(update, user_id, res, edit_message=True)
+
+        elif data.startswith("exam_tts_") or data.startswith("exam_ttsslow_"):
+            slow = "slow" in data
+            raw_id = data.replace("exam_ttsslow_", "").replace("exam_tts_", "")
+            active_exam = tracker.get_active_final_exam(user_id)
+            if active_exam:
+                exam_obj = get_level_exam(active_exam["language"], active_exam["level"])
+                q = next((item for item in exam_obj.questions if item.id == raw_id), None) if exam_obj else None
+                if q and q.audio_text:
+                    wav_bytes = azure_service.text_to_speech(text=q.audio_text, language=active_exam["language"], slow=slow)
+                    if wav_bytes:
+                        ogg_bytes = audio_converter.wav_to_ogg_opus(wav_bytes)
+                        stream = io.BytesIO(ogg_bytes if ogg_bytes else wav_bytes)
+                        stream.name = "audio_examen.ogg"
+                        await query.message.reply_voice(
+                            voice=stream,
+                            caption=f"🎧 Audio de Examen ({'0.8x' if slow else '1.0x'})",
+                        )
+
+        elif data == "exam_cancel":
+            tracker.cancel_final_exam(user_id)
+            await self._safe_edit_text(query, "❌ Evaluación final cancelada. Regresando a tus ejercicios.")
             await self._send_exercise_card(update, user_id, edit_message=False)
 
         elif data.startswith("fsm_review_"):
@@ -1675,8 +1988,11 @@ class TelegramCoachBot:
                 await self._send_unit_completed_card(
                     update, user_id, advance_info, edit_message=True
                 )
+            elif advance_info["status"] == "ready_for_final_exam":
+                await self._send_ready_for_exam_card(
+                    update, user_id, advance_info, edit_message=True
+                )
             else:
-                # Transición formal de la FSM a LEVEL_COMPLETED (las 6 unidades aprobadas)
                 await self._send_level_completed_card(
                     update, user_id, advance_info, edit_message=True
                 )
@@ -1714,7 +2030,14 @@ class TelegramCoachBot:
 
         elif data.startswith("fsm_ascend_"):
             target_level = data.replace("fsm_ascend_", "")
-            tracker.unlock_level(user_id, target_level)
+            state = tracker.get_user_state(user_id)
+            unlocked = state.get("unlocked_levels", ["A1"])
+            if target_level not in unlocked:
+                await query.answer(
+                    f"🔒 Para ascender a {target_level} debes aprobar primero la Evaluación Final de {state.get('level', 'A1')}.",
+                    show_alert=True,
+                )
+                return
             tracker.set_user_level(user_id, target_level)
             tracker.set_user_exercise_index(user_id, 0)
             tracker.set_fsm_state(user_id, "IN_EXERCISE")
@@ -1856,6 +2179,54 @@ class TelegramCoachBot:
         if skill_mode == "conversation" or state.get("fsm_state") == "IN_CONVERSATION":
             await self._handle_conversation_turn(update, user_id, user_text=text, is_audio=False)
             return
+
+        # 1.6 Modo EVALUACIÓN FINAL: Respuesta escrita en el examen
+        if state.get("fsm_state") == "IN_FINAL_EXAM":
+            active_exam = tracker.get_active_final_exam(user_id)
+            if active_exam:
+                exam_obj = get_level_exam(active_exam["language"], active_exam["level"])
+                if exam_obj:
+                    curr_q_idx = active_exam["current_question_index"]
+                    q = exam_obj.questions[curr_q_idx]
+                    if q.section == "schreiben":
+                        await update.effective_message.reply_chat_action(ChatAction.TYPING)
+                        eval_res = gemini_coach.evaluate_writing(
+                            user_input=text,
+                            target_text=q.target_answer or "",
+                            prompt=q.prompt_es,
+                            language=active_exam["language"],
+                            level=active_exam["level"],
+                        )
+                        is_correct = eval_res.is_correct or eval_res.score >= 70.0
+                        score_pts = float(q.points) * (eval_res.score / 100.0)
+
+                        res = tracker.submit_exam_answer(
+                            user_id=user_id,
+                            question_id=q.id,
+                            section=q.section,
+                            user_answer=text,
+                            is_correct=is_correct,
+                            score_points=score_pts,
+                            explanation=eval_res.pedagogical_feedback or q.explanation_es,
+                        )
+                        icon = "✅" if is_correct else "🟡"
+                        clean_fb = _format_markdown_for_telegram(eval_res.pedagogical_feedback)
+                        await self._safe_reply_text(
+                            update.effective_message,
+                            f"{icon} <b>Respuesta de Examen registrada ({eval_res.score:.0f}/100):</b>\n{clean_fb}",
+                        )
+                        if res.get("status") == "next_question":
+                            active_session = {
+                                "level": active_exam["level"],
+                                "language": active_exam["language"],
+                                "total_questions": len(exam_obj.questions),
+                                "current_index": res["current_index"],
+                                "current_question": res["current_question"],
+                            }
+                            await self._send_exam_question_card(update, user_id, active_session, edit_message=False)
+                        elif res.get("status") == "exam_completed":
+                            await self._send_exam_result_card(update, user_id, res, edit_message=False)
+                        return
 
         active_unit = state.get("active_unit", "all")
 
@@ -2155,6 +2526,71 @@ class TelegramCoachBot:
                     except Exception:
                         pass
             return
+
+        # 0.5 Modo EVALUACIÓN FINAL: Sección Sprechen (Expresión Oral)
+        if state.get("fsm_state") == "IN_FINAL_EXAM":
+            active_exam = tracker.get_active_final_exam(user_id)
+            if active_exam:
+                exam_obj = get_level_exam(active_exam["language"], active_exam["level"])
+                if exam_obj:
+                    curr_q_idx = active_exam["current_question_index"]
+                    q = exam_obj.questions[curr_q_idx]
+                    if q.section == "sprechen":
+                        status_msg = await update.message.reply_text(
+                            "🎧 <b>Evaluando tu pronunciación para la pregunta de examen...</b>",
+                            parse_mode=ParseMode.HTML,
+                        )
+                        temp_wav_path = None
+                        try:
+                            voice_obj = update.message.voice or update.message.audio
+                            if not voice_obj:
+                                return
+                            voice_file = await voice_obj.get_file()
+                            ogg_bytes = await voice_file.download_as_bytearray()
+                            wav_bytes = audio_converter.ogg_to_wav(bytes(ogg_bytes))
+                            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                                f.write(wav_bytes)
+                                temp_wav_path = f.name
+
+                            eval_res = azure_service.evaluate_pronunciation(
+                                temp_wav_path, q.target_answer or "", active_exam["language"]
+                            )
+                            score_val = eval_res.overall_score
+                            is_correct = score_val >= 65.0
+                            score_pts = float(q.points) * (score_val / 100.0)
+
+                            res = tracker.submit_exam_answer(
+                                user_id=user_id,
+                                question_id=q.id,
+                                section=q.section,
+                                user_answer=q.target_answer or "",
+                                is_correct=is_correct,
+                                score_points=score_pts,
+                                explanation=f"Puntaje fonético: {score_val:.0f}/100. {q.explanation_es}",
+                            )
+                            icon = "✅" if is_correct else "🟡"
+                            await self._safe_edit_text(
+                                status_msg,
+                                f"{icon} <b>Pregunta Oral Evaluada ({score_val:.0f}/100):</b>\n{q.explanation_es}",
+                            )
+                            if res.get("status") == "next_question":
+                                active_session = {
+                                    "level": active_exam["level"],
+                                    "language": active_exam["language"],
+                                    "total_questions": len(exam_obj.questions),
+                                    "current_index": res["current_index"],
+                                    "current_question": res["current_question"],
+                                }
+                                await self._send_exam_question_card(update, user_id, active_session, edit_message=False)
+                            elif res.get("status") == "exam_completed":
+                                await self._send_exam_result_card(update, user_id, res, edit_message=False)
+                        finally:
+                            if temp_wav_path and os.path.exists(temp_wav_path):
+                                try:
+                                    os.remove(temp_wav_path)
+                                except Exception:
+                                    pass
+                        return
 
         active_unit = state.get("active_unit", "all")
         if state.get("custom_phrase"):

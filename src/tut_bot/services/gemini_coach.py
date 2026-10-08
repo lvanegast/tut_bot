@@ -404,64 +404,112 @@ class GeminiCoachService:
         language: str = "de-DE",
     ) -> dict:
         """
-        Genera la réplica del personaje en un roleplay conversacional A1.
-        Mantiene el diálogo en CEFR A1 estricto, oraciones cortas, vocabulario común.
-        Determina si el usuario ha completado el objetivo de la misión.
+        Genera la réplica del personaje en un roleplay conversacional interactivo.
+        Garantiza flujo conversacional dinámico, evita desviaciones de tema (re-anchoring),
+        adapta vocabulario a CEFR estricto y asiste con andamiaje si el alumno se bloquea.
         """
         lang_name = "alemán" if language.startswith("de") else "inglés"
 
-        # Limitar la historia a los últimos 6 turnos para ahorrar tokens y mantener la latencia baja en Jetson
-        recent_history = dialogue_history[-6:] if dialogue_history else []
-        history_text = "\n".join(
-            [f"- {turn.get('name', turn.get('role'))}: {turn.get('text')}" for turn in recent_history]
-        )
+        # Mantener los últimos 10 turnos para memoria contextual fluida
+        # Excluir el último turno si ya es idéntico a user_message para evitar duplicación
+        history_to_format = list(dialogue_history) if dialogue_history else []
+        if history_to_format and history_to_format[-1].get("text") == user_message:
+            history_to_format = history_to_format[:-1]
+        recent_history = history_to_format[-10:]
 
-        user_turn_count = sum(1 for t in dialogue_history if t.get("role") == "user") + 1
+        history_lines = [
+            f"- {turn.get('name', turn.get('role', 'Interlocutor'))}: {turn.get('text', '')}"
+            for turn in recent_history
+        ]
+        history_text = "\n".join(history_lines) if history_lines else "(Inicio de la conversación)"
+
+        user_turn_count = sum(1 for t in dialogue_history if t.get("role") == "user")
 
         if not self.is_available() or settings.is_mock_mode:
-            is_goal_met = user_turn_count >= 3
+            # Flujo dinámico y contextual según el turno
             if language.startswith("de"):
-                replies = [
-                    ("Sehr gut! Möchten Sie noch etwas?", "¡Muy bien! ¿Desea algo más?"),
-                    ("Alles klar, das macht dann zusammen vier Euro bitte.", "Entendido, son cuatro euros en total por favor."),
-                    ("Perfekt! Vielen Dank und einen schönen Tag noch!", "¡Perfecto! ¡Muchas gracias y que tenga un buen día!"),
+                replies_flow = [
+                    (
+                        "Guten Tag! Gerne. Möchten Sie einen Kaffee dazu trinken?",
+                        "¡Buenas tardes! Con gusto. ¿Desea tomar un café para acompañar?",
+                    ),
+                    (
+                        "Alles klar! Das macht zusammen vier Euro fünfzig bitte. Zahlen Sie bar oder mit Karte?",
+                        "¡Muy bien! Son cuatro euros cincuenta en total por favor. ¿Paga en efectivo o con tarjeta?",
+                    ),
+                    (
+                        "Vielen Dank! Hier ist Ihre Quittung und Ihr Wechselgeld. Brauchen Sie sonst noch etwas?",
+                        "¡Muchas gracias! Aquí tiene su recibo y su cambio. ¿Necesita algo más?",
+                    ),
+                    (
+                        "Perfekt! Einen wunderschönen Tag noch und auf Wiedersehen!",
+                        "¡Perfecto! ¡Que tenga un excelente día y hasta pronto!",
+                    ),
                 ]
-                idx = min(user_turn_count - 1, len(replies) - 1)
-                rep_native, rep_es = replies[idx]
+                idx = min(user_turn_count - 1 if user_turn_count > 0 else 0, len(replies_flow) - 1)
+                rep_native, rep_es = replies_flow[idx]
             else:
-                replies = [
-                    ("Very good! Would you like anything else?", "¡Muy bien! ¿Te gustaría algo más?"),
-                    ("Sure, that comes to four pounds please.", "Claro, son cuatro libras por favor."),
-                    ("Perfect! Thank you so much and have a wonderful day!", "¡Perfecto! ¡Muchas gracias y que tengas un buen día!"),
+                replies_flow = [
+                    (
+                        "Hello there! Sure thing. Would you like a hot coffee or tea with that?",
+                        "¡Hola! Claro que sí. ¿Te gustaría un café caliente o té para acompañar?",
+                    ),
+                    (
+                        "Coming right up! That comes to four pounds fifty please. Cash or card?",
+                        "¡Enseguida! Son cuatro libras con cincuenta por favor. ¿Efectivo o tarjeta?",
+                    ),
+                    (
+                        "Thank you so much! Here is your receipt. Is there anything else I can get you?",
+                        "¡Muchas gracias! Aquí está tu recibo. ¿Hay algo más que pueda traerte?",
+                    ),
+                    (
+                        "Brilliant! Have a fantastic day and see you next time!",
+                        "¡Estupendo! ¡Que tengas un día fantástico y hasta la próxima!",
+                    ),
                 ]
-                idx = min(user_turn_count - 1, len(replies) - 1)
-                rep_native, rep_es = replies[idx]
+                idx = min(user_turn_count - 1 if user_turn_count > 0 else 0, len(replies_flow) - 1)
+                rep_native, rep_es = replies_flow[idx]
 
+            is_goal_met = user_turn_count >= 4
             return {
                 "reply_native": rep_native,
                 "reply_es": rep_es,
                 "mission_status": "goal_achieved" if is_goal_met else "in_progress",
-                "feedback_tip": "¡Vas muy bien! Intenta responder con frases completas." if user_turn_count == 1 else None,
+                "feedback_tip": "¡Excelente ritmo! Intenta usar frases completas en tu respuesta."
+                if user_turn_count == 1
+                else None,
             }
 
         prompt = (
-            f"Estás en un juego de rol pedagógico (Roleplay) para un alumno hispanohablante de {lang_name} nivel A1 (Principiante).\n"
+            f"Actúas como un profesor nativo y compañero de roleplay interactivo de {lang_name} para un alumno hispanohablante.\n"
             f"Escenario: {scenario_title}\n"
             f"Tu personaje: {character_name} ({character_role})\n"
-            f"Misión del alumno: {mission_brief}\n"
-            f"Frases objetivo sugeridas: {', '.join(target_phrases)}\n\n"
-            f"Historial reciente del diálogo:\n{history_text}\n"
-            f"- Alumno: {user_message}\n\n"
-            f"Instrucciones estrictas:\n"
-            f"1. Responde interpretando a tu personaje {character_name}.\n"
-            f"2. Nivel CEFR A1 ESTRICTO: oraciones directas, vocabulario común y cotidiano, MÁXIMO 1-2 oraciones cortas (menos de 20 palabras).\n"
-            f"3. Proporciona la traducción natural al español de tu réplica.\n"
-            f"4. Evalúa si el alumno ha cumplido la misión ('goal_achieved') o sigue en curso ('in_progress'). Si lleva 3 o más intercambios satisfactorios, marca 'goal_achieved'.\n"
-            f"5. Si el alumno cometió un error gramatical o léxico notable de A1 en su mensaje, incluye un 'feedback_tip' breve y cordial en español (1 oración); si no hay errores, pon null.\n\n"
-            f"Responde ÚNICAMENTE en formato JSON válido con este esquema:\n"
+            f"Misión pedagógica del alumno: {mission_brief}\n"
+            f"Frases clave esperadas: {', '.join(target_phrases)}\n\n"
+            f"Historial del diálogo previo:\n{history_text}\n"
+            f"- Alumno (último mensaje): {user_message}\n\n"
+            f"REGLAS CRÍTICAS DE FLUJO Y COHERENCIA:\n"
+            f"1. FLUJO CONVERSACIONAL ACTIVO (Turn-taking):\n"
+            f"   - Reacciona con empatía y naturalidad al mensaje del alumno.\n"
+            f"   - Responde dentro de tu rol de {character_name}.\n"
+            f"   - TERMINA SIEMPRE con UNA sola pregunta o invitación sencilla y directa de nivel A1 que invite al alumno a continuar el diálogo (ej: '¿Deseas azúcar?', '¿Pagas en efectivo o tarjeta?'). NUNCA dejes la conversación en silencio ni des respuestas cerradas.\n"
+            f"2. CONTROL CONTRA DESVÍOS (Anti-tangentes & Re-anchoring):\n"
+            f"   - Si el alumno habla en español, dice 'no sé qué decir', o se sale del tema de la escena:\n"
+            f"     NO rompas el personaje ni te vayas por las ramas. Reacciona cordialmente dentro de tu rol en {lang_name}, mantén la escena viva, y dale una mano pedagógica:\n"
+            f"     Ejemplo: 'Kein Problem! In der Bäckerei sagen wir: Ich möchte... Was möchten Sie bestellen?'\n"
+            f"     Y coloca en 'feedback_tip' una sugerencia clara en español con la frase exacta que puede usar.\n"
+            f"3. NIVEL CEFR A1 ESTRICTO:\n"
+            f"   - Oraciones cortas, directas y cotidianas (máximo 20 palabras por réplica). Cero construcciones complejas.\n"
+            f"4. CONDICIÓN DE CUMPLIMIENTO ('mission_status'):\n"
+            f"   - 'in_progress': Mientras la interacción siga en curso y falte completar pasos de la misión.\n"
+            f"   - 'goal_achieved': ÚNICAMENTE cuando la transacción o el objetivo se haya completado satisfactoriamente (ej: pidió, pagó y se despidió) Y el personaje se esté despidiendo con cortesía (Tschüss / Auf Wiedersehen / Goodbye / Have a nice day).\n"
+            f"   - NUNCA cortes la conversación de forma prematura ni dejes cabos sueltos.\n"
+            f"5. CORRECCIÓN SUTIL ('feedback_tip'):\n"
+            f"   - Si el alumno cometió un error gramatical o léxico notable, añade un tip amable de 1 frase en español. Si su mensaje fue correcto o comprensible, pon null.\n\n"
+            f"Responde ESTRICTAMENTE en formato JSON válido:\n"
             f'{{\n'
-            f'  "reply_native": "texto en {lang_name} de tu personaje",\n'
-            f'  "reply_es": "traducción en español",\n'
+            f'  "reply_native": "texto en {lang_name} de {character_name}",\n'
+            f'  "reply_es": "traducción fidedigna al español",\n'
             f'  "mission_status": "in_progress" | "goal_achieved",\n'
             f'  "feedback_tip": "consejo breve en español o null"\n'
             f'}}'
@@ -469,12 +517,28 @@ class GeminiCoachService:
 
         try:
             if HAS_NEW_GENAI and self.client:
-                for candidate_model in ["gemini-flash-lite-latest", "gemini-flash-latest"]:
+                # Usar configuración con temperatura adecuada para conversación natural
+                config = None
+                try:
+                    from google.genai import types
+
+                    config = types.GenerateContentConfig(
+                        max_output_tokens=220,
+                        temperature=0.35,
+                    )
+                except Exception:
+                    pass
+
+                for candidate_model in [
+                    "gemini-flash-lite-latest",
+                    "gemini-flash-latest",
+                    "gemini-2.5-flash-lite",
+                ]:
                     try:
-                        res = self.client.models.generate_content(
-                            model=candidate_model,
-                            contents=prompt,
-                        )
+                        kwargs = {"model": candidate_model, "contents": prompt}
+                        if config:
+                            kwargs["config"] = config
+                        res = self.client.models.generate_content(**kwargs)
                         if res and res.text:
                             text_raw = res.text.strip()
                             if "```json" in text_raw:
@@ -488,18 +552,27 @@ class GeminiCoachService:
                                 "mission_status": data.get("mission_status", "in_progress"),
                                 "feedback_tip": data.get("feedback_tip"),
                             }
-                    except Exception:
+                    except Exception as exc:
+                        logger.warning(f"Error procesando conversación con {candidate_model}: {exc}")
                         continue
         except Exception as e:
-            logger.error(f"Error generando réplica de conversación: {e}")
+            logger.error(f"Error en generate_conversation_reply: {e}")
 
         # Fallback de emergencia
-        default_reply = "Sehr gut, danke!" if language.startswith("de") else "Very good, thanks!"
-        default_es = "¡Muy bien, gracias!"
+        default_reply = (
+            "Sehr gerne! Möchten Sie noch etwas dazu bestellen?"
+            if language.startswith("de")
+            else "Certainly! Would you like anything else with that?"
+        )
+        default_es = (
+            "¡Con mucho gusto! ¿Desea pedir algo más para acompañar?"
+            if language.startswith("de")
+            else "¡Por supuesto! ¿Te gustaría algo más para acompañar?"
+        )
         return {
             "reply_native": default_reply,
             "reply_es": default_es,
-            "mission_status": "in_progress" if user_turn_count < 3 else "goal_achieved",
+            "mission_status": "in_progress",
             "feedback_tip": None,
         }
 

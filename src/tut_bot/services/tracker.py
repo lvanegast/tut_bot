@@ -139,6 +139,26 @@ class ProgressTracker:
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_user_conv ON user_conversations(user_id, is_completed)"
             )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS user_exams (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    language TEXT NOT NULL,
+                    level TEXT NOT NULL,
+                    current_question_index INTEGER NOT NULL DEFAULT 0,
+                    answers_json TEXT NOT NULL DEFAULT '[]',
+                    score REAL DEFAULT 0.0,
+                    is_passed INTEGER DEFAULT 0,
+                    is_completed INTEGER DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_user_exam ON user_exams(user_id, is_completed)"
+            )
             conn.commit()
 
     def get_user_state(self, user_id: str) -> Dict[str, Any]:
@@ -250,8 +270,14 @@ class ProgressTracker:
             )
             conn.commit()
 
-    def set_user_level(self, user_id: str, level: str):
-        self.get_user_state(user_id)
+    def set_user_level(self, user_id: str, level: str) -> bool:
+        state = self.get_user_state(user_id)
+        unlocked = state.get("unlocked_levels", ["A1"])
+        if level not in unlocked:
+            logger.warning(
+                f"Usuario {user_id} intentó acceder al nivel {level} pero aún no está desbloqueado."
+            )
+            return False
         now = datetime.now(timezone.utc).isoformat()
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -264,6 +290,7 @@ class ProgressTracker:
                 (level, now, user_id),
             )
             conn.commit()
+        return True
 
     def set_user_exercise_index(self, user_id: str, index: int):
         now = datetime.now(timezone.utc).isoformat()
@@ -364,13 +391,14 @@ class ProgressTracker:
         user_id: str,
         total_exercises: int,
         current_unit_id: Optional[str] = None,
-        require_all_units: bool = False,
+        require_all_units: bool = True,
     ) -> Dict[str, Any]:
         """
         Avanza la máquina de estados pedagógica.
         - Si quedan ejercicios en la serie actual: avanza al siguiente (IN_EXERCISE).
-        - Si require_all_units=True o se especifica unidad temática: transiciona a UNIT_COMPLETED
-          y solo a LEVEL_COMPLETED cuando se aprueban las 6 unidades oficiales de A1.
+        - Si se completa una unidad: transiciona a UNIT_COMPLETED.
+        - Solo cuando se completan las 6 unidades oficiales de A1: transiciona a READY_FOR_FINAL_EXAM.
+          El siguiente nivel (A2) NUNCA se desbloquea automáticamente hasta aprobar el Examen Final.
         """
         state = self.get_user_state(user_id)
         current_idx = state["exercise_index"]
@@ -388,73 +416,56 @@ class ProgressTracker:
                 "total": total_exercises,
             }
         else:
-            # Llegó al final de la serie
-            if require_all_units or (current_unit_id and current_unit_id != "all"):
-                unit_to_mark = (
-                    current_unit_id
-                    if (current_unit_id and current_unit_id != "all")
-                    else state.get("active_unit", "unit_1")
-                )
-                if unit_to_mark == "all":
-                    unit_to_mark = "unit_1"
+            # Llegó al final de la serie de ejercicios
+            unit_to_mark = (
+                current_unit_id
+                if (current_unit_id and current_unit_id != "all")
+                else state.get("active_unit", "unit_1")
+            )
+            if unit_to_mark == "all":
+                unit_to_mark = "unit_1"
 
-                completed_units = self.mark_unit_completed(user_id, lang, level, unit_to_mark)
-                total_units = 6  # 6 Unidades Temáticas oficiales por nivel
+            completed_units = self.mark_unit_completed(user_id, lang, level, unit_to_mark)
+            total_units = 6  # 6 Unidades Temáticas oficiales por nivel
 
-                unit_num = 1
-                if unit_to_mark.startswith("unit_"):
-                    try:
-                        unit_num = int(unit_to_mark.replace("unit_", ""))
-                    except ValueError:
-                        unit_num = 1
-                elif unit_to_mark.isdigit():
-                    unit_num = int(unit_to_mark)
-                next_unit_num = unit_num + 1
-                next_unit_id = f"unit_{next_unit_num}" if next_unit_num <= total_units else None
+            unit_num = 1
+            if unit_to_mark.startswith("unit_"):
+                try:
+                    unit_num = int(unit_to_mark.replace("unit_", ""))
+                except ValueError:
+                    unit_num = 1
+            elif unit_to_mark.isdigit():
+                unit_num = int(unit_to_mark)
+            next_unit_num = unit_num + 1
+            next_unit_id = f"unit_{next_unit_num}" if next_unit_num <= total_units else None
 
-                all_units_done = len(completed_units) >= total_units
+            all_units_done = len(completed_units) >= total_units
 
-                if all_units_done:
-                    self.set_fsm_state(user_id, "LEVEL_COMPLETED")
-                    self.mark_level_passed(user_id, lang, level, skill)
-                    next_level = "A2" if level == "A1" else ("B1" if level == "A2" else None)
-                    if next_level:
-                        self.unlock_level(user_id, next_level)
-                    return {
-                        "status": "level_completed",
-                        "language": lang,
-                        "level": level,
-                        "skill_mode": skill,
-                        "next_level": next_level,
-                        "total_completed": total_exercises,
-                        "units_completed": len(completed_units),
-                        "total_units": total_units,
-                    }
-                else:
-                    self.set_fsm_state(user_id, "UNIT_COMPLETED")
-                    return {
-                        "status": "unit_completed",
-                        "language": lang,
-                        "level": level,
-                        "skill_mode": skill,
-                        "completed_unit": unit_to_mark,
-                        "next_unit": next_unit_id,
-                        "units_completed_count": len(completed_units),
-                        "total_units": total_units,
-                    }
-            else:
-                self.set_fsm_state(user_id, "LEVEL_COMPLETED")
+            if all_units_done:
+                self.set_fsm_state(user_id, "READY_FOR_FINAL_EXAM")
                 self.mark_level_passed(user_id, lang, level, skill)
                 next_level = "A2" if level == "A1" else ("B1" if level == "A2" else None)
-                if next_level:
-                    self.unlock_level(user_id, next_level)
                 return {
-                    "status": "level_completed",
+                    "status": "ready_for_final_exam",
                     "language": lang,
                     "level": level,
                     "skill_mode": skill,
                     "next_level": next_level,
                     "total_completed": total_exercises,
+                    "units_completed": len(completed_units),
+                    "total_units": total_units,
+                }
+            else:
+                self.set_fsm_state(user_id, "UNIT_COMPLETED")
+                return {
+                    "status": "unit_completed",
+                    "language": lang,
+                    "level": level,
+                    "skill_mode": skill,
+                    "completed_unit": unit_to_mark,
+                    "next_unit": next_unit_id,
+                    "units_completed_count": len(completed_units),
+                    "total_units": total_units,
                 }
 
     def mark_level_passed(self, user_id: str, language: str, level: str, skill_mode: str):
@@ -497,12 +508,12 @@ class ProgressTracker:
                 conn.commit()
 
     def ascend_to_next_level(self, user_id: str) -> Optional[str]:
-        """Asciende al alumno al siguiente nivel CEFR y resetea el índice al primer ejercicio del nuevo nivel."""
+        """Asciende al alumno al siguiente nivel CEFR únicamente si ya fue desbloqueado tras aprobar el examen final."""
         state = self.get_user_state(user_id)
         current_level = state.get("level", "A1")
         next_level = "A2" if current_level == "A1" else ("B1" if current_level == "A2" else None)
-        if next_level:
-            self.unlock_level(user_id, next_level)
+        unlocked = state.get("unlocked_levels", ["A1"])
+        if next_level and next_level in unlocked:
             now = datetime.now(timezone.utc).isoformat()
             with self._get_connection() as conn:
                 cursor = conn.cursor()
@@ -516,7 +527,218 @@ class ProgressTracker:
                 )
                 conn.commit()
             return next_level
+        logger.warning(
+            f"Ascenso denegado para {user_id}: el nivel {next_level} aún no está en desbloqueados {unlocked}"
+        )
         return None
+
+    def can_take_final_exam(self, user_id: str, language: str, level: str) -> Dict[str, Any]:
+        """
+        Determina si el usuario cumple los requisitos para rendir la Evaluación Final de Nivel.
+        Requisito estricto: Haber completado las 6 Unidades Temáticas oficiales de dicho nivel.
+        """
+        completed_units = self.get_completed_units(user_id, language, level)
+        total_units = 6
+        can_take = len(completed_units) >= total_units
+        missing = [
+            f"unit_{i}"
+            for i in range(1, total_units + 1)
+            if f"unit_{i}" not in completed_units
+        ]
+        state = self.get_user_state(user_id)
+        is_already_certified = f"{language}_{level}_certified" in state.get(
+            "passed_levels", []
+        )
+        return {
+            "can_take": can_take,
+            "completed_count": len(completed_units),
+            "total_units": total_units,
+            "missing_units": missing,
+            "is_already_certified": is_already_certified,
+        }
+
+    def start_final_exam(
+        self, user_id: str, language: str, level: str
+    ) -> Optional[Dict[str, Any]]:
+        """Inicia una sesión de Evaluación Final de Nivel en la base de datos."""
+        from tut_bot.services.final_exam import get_level_exam
+
+        exam = get_level_exam(language, level)
+        if not exam:
+            return None
+
+        now = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            # Cerrar exámenes previos no completados
+            cursor.execute(
+                "UPDATE user_exams SET is_completed = 1, updated_at = ? WHERE user_id = ? AND is_completed = 0",
+                (now, user_id),
+            )
+            cursor.execute(
+                """
+                INSERT INTO user_exams (
+                    user_id, language, level, current_question_index,
+                    answers_json, score, is_passed, is_completed, created_at, updated_at
+                )
+                VALUES (?, ?, ?, 0, '[]', 0.0, 0, 0, ?, ?)
+                """,
+                (user_id, language, level, now, now),
+            )
+            conn.commit()
+            exam_id = cursor.lastrowid
+
+        self.set_fsm_state(user_id, "IN_FINAL_EXAM")
+        return {
+            "exam_id": exam_id,
+            "level": level,
+            "language": language,
+            "title_es": exam.title_es,
+            "description_es": exam.description_es,
+            "total_questions": len(exam.questions),
+            "current_index": 0,
+            "current_question": exam.questions[0] if exam.questions else None,
+        }
+
+    def get_active_final_exam(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """Recupera el examen final activo del usuario si existe."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT * FROM user_exams
+                WHERE user_id = ? AND is_completed = 0
+                ORDER BY id DESC LIMIT 1
+                """,
+                (user_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            row_dict = dict(row)
+            try:
+                answers = json.loads(row_dict.get("answers_json", "[]"))
+            except Exception:
+                answers = []
+            row_dict["answers"] = answers
+            return row_dict
+
+    def submit_exam_answer(
+        self,
+        user_id: str,
+        question_id: str,
+        section: str,
+        user_answer: str,
+        is_correct: bool,
+        score_points: float,
+        explanation: str,
+    ) -> Dict[str, Any]:
+        """Registra la respuesta a una pregunta del examen y avanza."""
+        from tut_bot.services.final_exam import get_level_exam
+
+        active = self.get_active_final_exam(user_id)
+        if not active:
+            return {"error": "No hay examen activo"}
+
+        language = active["language"]
+        level = active["level"]
+        exam = get_level_exam(language, level)
+        if not exam:
+            return {"error": "Examen no encontrado"}
+
+        answers = active.get("answers", [])
+        answers.append(
+            {
+                "question_id": question_id,
+                "section": section,
+                "user_answer": user_answer,
+                "is_correct": is_correct,
+                "score_points": score_points,
+                "explanation": explanation,
+            }
+        )
+
+        next_idx = active["current_question_index"] + 1
+        now = datetime.now(timezone.utc).isoformat()
+        total_q = len(exam.questions)
+
+        if next_idx < total_q:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE user_exams SET current_question_index = ?, answers_json = ?, updated_at = ? WHERE id = ?",
+                    (next_idx, json.dumps(answers), now, active["id"]),
+                )
+                conn.commit()
+            return {
+                "status": "next_question",
+                "current_index": next_idx,
+                "total_questions": total_q,
+                "current_question": exam.questions[next_idx],
+                "last_result": {
+                    "is_correct": is_correct,
+                    "explanation": explanation,
+                },
+            }
+        else:
+            # Calificación final del examen completo
+            total_possible = sum(q.points for q in exam.questions)
+            total_earned = sum(a.get("score_points", 0.0) for a in answers)
+            score_percent = round((total_earned / max(1, total_possible)) * 100.0, 1)
+            is_passed = score_percent >= exam.passing_score_percentage
+
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    UPDATE user_exams
+                    SET current_question_index = ?, answers_json = ?, score = ?,
+                        is_passed = ?, is_completed = 1, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        next_idx,
+                        json.dumps(answers),
+                        score_percent,
+                        1 if is_passed else 0,
+                        now,
+                        active["id"],
+                    ),
+                )
+                conn.commit()
+
+            if is_passed:
+                self.mark_level_passed(user_id, language, level, "certified")
+                next_level = "A2" if level == "A1" else ("B1" if level == "A2" else None)
+                if next_level:
+                    self.unlock_level(user_id, next_level)
+                self.set_fsm_state(user_id, "EXAM_PASSED")
+            else:
+                next_level = None
+                self.set_fsm_state(user_id, "EXAM_FAILED")
+
+            return {
+                "status": "exam_completed",
+                "is_passed": is_passed,
+                "score_percent": score_percent,
+                "passing_score": exam.passing_score_percentage,
+                "level": level,
+                "language": language,
+                "next_level": next_level,
+                "answers": answers,
+            }
+
+    def cancel_final_exam(self, user_id: str):
+        """Cancela el examen activo y regresa al modo de ejercicios."""
+        now = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE user_exams SET is_completed = 1, updated_at = ? WHERE user_id = ? AND is_completed = 0",
+                (now, user_id),
+            )
+            conn.commit()
+        self.set_fsm_state(user_id, "IN_EXERCISE")
 
     def set_user_unit(self, user_id: str, unit_id: str):
         """Fija la unidad temática activa del usuario y reinicia el índice del ejercicio."""

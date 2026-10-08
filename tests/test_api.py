@@ -127,6 +127,7 @@ def test_progress_tracker():
     user_id = "test_unit_user_01"
     tracker.set_user_language(user_id, "de-DE")
     tracker.set_user_skill_mode(user_id, "writing")
+    tracker.unlock_level(user_id, "A2")
     tracker.set_user_level(user_id, "A2")
     tracker.set_user_exercise_index(user_id, 3)
     state = tracker.get_user_state(user_id)
@@ -230,9 +231,10 @@ def test_telegram_bot_service():
 
 
 def test_fsm_progression_and_level_graduation():
+    import uuid
     from tut_bot.services.tracker import tracker
 
-    user_id = "test_fsm_user_flow"
+    user_id = f"test_fsm_user_flow_{uuid.uuid4().hex[:8]}"
     tracker.set_user_language(user_id, "de-DE")
     tracker.set_user_level(user_id, "A1")
     tracker.set_user_skill_mode(user_id, "speaking")
@@ -252,25 +254,19 @@ def test_fsm_progression_and_level_graduation():
     assert step2["status"] == "next_exercise"
     assert step2["index"] == 2
 
-    # 3. Al completar el último ejercicio, NO debe entrar en bucle infinito
-    step3 = tracker.advance_exercise_fsm(user_id, total_exercises=3)
-    assert step3["status"] == "level_completed"
-    assert step3["level"] == "A1"
-    assert step3["next_level"] == "A2"
+    # 3. Al completar una serie de una unidad, NO debe desbloquear A2 automáticamente
+    step3 = tracker.advance_exercise_fsm(user_id, total_exercises=3, current_unit_id="unit_1")
+    assert step3["status"] == "unit_completed"
+    assert step3["completed_unit"] == "unit_1"
 
     state = tracker.get_user_state(user_id)
-    assert state["fsm_state"] == "LEVEL_COMPLETED"
-    assert "A2" in state["unlocked_levels"]
-    assert "de-DE_A1_speaking" in state["passed_levels"]
+    assert state["fsm_state"] == "UNIT_COMPLETED"
+    assert "A2" not in state["unlocked_levels"]
 
-    # 4. Probar graduación formal / ascenso al siguiente nivel CEFR
-    ascend_res = tracker.ascend_to_next_level(user_id)
-    assert ascend_res == "A2"
-
-    state = tracker.get_user_state(user_id)
-    assert state["level"] == "A2"
-    assert state["exercise_index"] == 0
-    assert state["fsm_state"] == "IN_EXERCISE"
+    # 4. Intentar saltar a A2 sin haber completado los temas ni el examen debe ser bloqueado
+    blocked = tracker.set_user_level(user_id, "A2")
+    assert blocked is False
+    assert tracker.get_user_state(user_id)["level"] == "A1"
 
     # 5. Registro de ejercicios completados individualmente
     tracker.mark_exercise_completed(user_id, "de_a1_spk_01")
@@ -278,42 +274,76 @@ def test_fsm_progression_and_level_graduation():
     assert "de_a1_spk_01" in state["completed_exercises"]
 
 
-def test_fsm_unit_progression_requires_all_6_units():
+def test_fsm_unit_progression_requires_all_6_units_and_final_exam():
+    import uuid
+    from tut_bot.services.final_exam import get_level_exam
     from tut_bot.services.tracker import tracker
 
-    import uuid
     user_id = f"test_fsm_units_6_flow_{uuid.uuid4().hex[:8]}"
     tracker.set_user_language(user_id, "de-DE")
     tracker.set_user_level(user_id, "A1")
     tracker.set_user_skill_mode(user_id, "speaking")
 
-    # 1. Completar unidad 1 de 6 -> Debe marcar UNIT_COMPLETED y NO desbloquear A2
-    step = tracker.advance_exercise_fsm(user_id, total_exercises=1, current_unit_id="unit_1", require_all_units=True)
-    assert step["status"] == "unit_completed"
-    assert step["completed_unit"] == "unit_1"
-    assert step["next_unit"] == "unit_2"
-    assert step["units_completed_count"] == 1
-    assert step["total_units"] == 6
-
-    state = tracker.get_user_state(user_id)
-    assert state["fsm_state"] == "UNIT_COMPLETED"
-    assert "A2" not in state["unlocked_levels"]
-
-    # 2. Completar unidades 2 a 5
-    for u in [2, 3, 4, 5]:
-        res = tracker.advance_exercise_fsm(user_id, total_exercises=1, current_unit_id=f"unit_{u}", require_all_units=True)
+    # 1. Completar unidades 1 a 5 -> Debe marcar UNIT_COMPLETED y NO desbloquear A2
+    for u in range(1, 6):
+        res = tracker.advance_exercise_fsm(
+            user_id, total_exercises=1, current_unit_id=f"unit_{u}", require_all_units=True
+        )
         assert res["status"] == "unit_completed"
         assert "A2" not in tracker.get_user_state(user_id)["unlocked_levels"]
 
-    # 3. Completar la sexta unidad (unit_6) -> Ahora sí se gradúa a nivel A1 completo y desbloquea A2
-    final_step = tracker.advance_exercise_fsm(user_id, total_exercises=1, current_unit_id="unit_6", require_all_units=True)
-    assert final_step["status"] == "level_completed"
+    # 2. Completar la sexta unidad (unit_6) -> Transiciona a READY_FOR_FINAL_EXAM, A2 sigue bloqueado
+    final_step = tracker.advance_exercise_fsm(
+        user_id, total_exercises=1, current_unit_id="unit_6", require_all_units=True
+    )
+    assert final_step["status"] == "ready_for_final_exam"
     assert final_step["next_level"] == "A2"
     assert final_step["units_completed"] == 6
 
     final_state = tracker.get_user_state(user_id)
-    assert final_state["fsm_state"] == "LEVEL_COMPLETED"
-    assert "A2" in final_state["unlocked_levels"]
+    assert final_state["fsm_state"] == "READY_FOR_FINAL_EXAM"
+    assert "A2" not in final_state["unlocked_levels"]
+
+    # 3. Comprobar que califica para el examen final
+    exam_check = tracker.can_take_final_exam(user_id, "de-DE", "A1")
+    assert exam_check["can_take"] is True
+    assert exam_check["completed_count"] == 6
+
+    # 4. Iniciar y rendir la Evaluación Final
+    exam_session = tracker.start_final_exam(user_id, "de-DE", "A1")
+    assert exam_session is not None
+    assert exam_session["total_questions"] >= 4
+
+    exam_obj = get_level_exam("de-DE", "A1")
+    assert exam_obj is not None
+
+    # Responder las preguntas acertadamente
+    for idx, q in enumerate(exam_obj.questions):
+        ans_res = tracker.submit_exam_answer(
+            user_id=user_id,
+            question_id=q.id,
+            section=q.section,
+            user_answer="Respuesta correcta",
+            is_correct=True,
+            score_points=float(q.points),
+            explanation="Excelente",
+        )
+        if idx < len(exam_obj.questions) - 1:
+            assert ans_res["status"] == "next_question"
+        else:
+            assert ans_res["status"] == "exam_completed"
+            assert ans_res["is_passed"] is True
+            assert ans_res["score_percent"] >= 75.0
+
+    # 5. Tras aprobar el examen final, A2 queda formalmente desbloqueado
+    certified_state = tracker.get_user_state(user_id)
+    assert "A2" in certified_state["unlocked_levels"]
+    assert "de-DE_A1_certified" in certified_state["passed_levels"]
+
+    # 6. Ascender formalmente al nivel A2
+    ascended = tracker.ascend_to_next_level(user_id)
+    assert ascended == "A2"
+    assert tracker.get_user_state(user_id)["level"] == "A2"
 
 
 def test_curriculum_and_vocabulary_tracking():
