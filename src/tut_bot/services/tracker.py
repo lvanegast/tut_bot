@@ -159,6 +159,76 @@ class ProgressTracker:
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_user_exam ON user_exams(user_id, is_completed)"
             )
+
+            # Migración y saneamiento CEFR: Corregir registros legados donde A2 fue desbloqueado
+            # o A1 marcado como completo sin examen aprobado en user_exams.
+            cursor.execute(
+                "SELECT user_id, language, level, unlocked_levels, passed_levels, fsm_state FROM user_states"
+            )
+            rows = cursor.fetchall()
+            now_iso = datetime.now(timezone.utc).isoformat()
+            for r in rows:
+                uid = r["user_id"]
+                u_lang = r["language"]
+                u_lvl = r["level"]
+                try:
+                    u_unlocked = (
+                        json.loads(r["unlocked_levels"]) if r["unlocked_levels"] else ["A1"]
+                    )
+                except Exception:
+                    u_unlocked = ["A1"]
+                try:
+                    u_passed = json.loads(r["passed_levels"]) if r["passed_levels"] else []
+                except Exception:
+                    u_passed = []
+
+                # Verificar si tiene examen A1 aprobado
+                cursor.execute(
+                    "SELECT id FROM user_exams WHERE user_id = ? AND language = ? AND level = 'A1' AND is_passed = 1 LIMIT 1",
+                    (uid, u_lang),
+                )
+                has_a1_cert = cursor.fetchone() is not None
+
+                needs_update = False
+                # Si no tiene A1 certificado pero tiene A2 o B1 en unlocked_levels
+                if not has_a1_cert and ("A2" in u_unlocked or "B1" in u_unlocked):
+                    u_unlocked = ["A1"]
+                    needs_update = True
+
+                # Saneamiento de nivel actual
+                if not has_a1_cert and u_lvl in ("A2", "B1"):
+                    u_lvl = "A1"
+                    needs_update = True
+
+                # Saneamiento de fsm_state: si estaba LEVEL_COMPLETED sin examen
+                u_fsm = r["fsm_state"]
+                if not has_a1_cert and u_fsm == "LEVEL_COMPLETED":
+                    u_fsm = "IN_EXERCISE"
+                    needs_update = True
+
+                # Saneamiento de passed_levels falso
+                if not has_a1_cert:
+                    cleaned_passed = [
+                        p
+                        for p in u_passed
+                        if not p.endswith("_certified")
+                        and not p.endswith("_speaking")
+                        and not p.endswith("_writing")
+                        and not p.endswith("_listening")
+                    ]
+                    if len(cleaned_passed) != len(u_passed):
+                        u_passed = cleaned_passed
+                        needs_update = True
+
+                if needs_update:
+                    cursor.execute(
+                        """
+                        UPDATE user_states
+                        SET unlocked_levels = ?, passed_levels = ?, level = ?, fsm_state = ?, updated_at = ?
+                        WHERE user_id = ?
+                        """,
+                        (json.dumps(u_unlocked), json.dumps(u_passed), u_lvl, u_fsm, now_iso, uid),
+                    )
             conn.commit()
 
     def get_user_state(self, user_id: str) -> Dict[str, Any]:
@@ -443,7 +513,6 @@ class ProgressTracker:
 
             if all_units_done:
                 self.set_fsm_state(user_id, "READY_FOR_FINAL_EXAM")
-                self.mark_level_passed(user_id, lang, level, skill)
                 next_level = "A2" if level == "A1" else ("B1" if level == "A2" else None)
                 return {
                     "status": "ready_for_final_exam",
@@ -532,6 +601,49 @@ class ProgressTracker:
         )
         return None
 
+    def is_level_certified(self, user_id: str, language: str, level: str) -> bool:
+        """Verifica en user_exams si el usuario realmente rindió y aprobó el examen final oficial."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id FROM user_exams
+                WHERE user_id = ? AND language = ? AND level = ? AND is_passed = 1
+                LIMIT 1
+                """,
+                (user_id, language, level),
+            )
+            return cursor.fetchone() is not None
+
+    def reset_user_progress(self, user_id: str, language: Optional[str] = None):
+        """Reinicia por completo el progreso pedagógico de un usuario para comenzar desde cero."""
+        now = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE user_states
+                SET exercise_index = 0,
+                    custom_phrase = NULL,
+                    skill_mode = 'speaking',
+                    level = 'A1',
+                    fsm_state = 'IN_EXERCISE',
+                    completed_exercises = '[]',
+                    unlocked_levels = '["A1"]',
+                    passed_levels = '[]',
+                    active_unit = 'all',
+                    completed_units = '[]',
+                    updated_at = ?
+                WHERE user_id = ?
+                """,
+                (now, user_id),
+            )
+            cursor.execute(
+                "UPDATE user_exams SET is_completed = 1, updated_at = ? WHERE user_id = ? AND is_completed = 0",
+                (now, user_id),
+            )
+            conn.commit()
+
     def can_take_final_exam(self, user_id: str, language: str, level: str) -> Dict[str, Any]:
         """
         Determina si el usuario cumple los requisitos para rendir la Evaluación Final de Nivel.
@@ -545,10 +657,7 @@ class ProgressTracker:
             for i in range(1, total_units + 1)
             if f"unit_{i}" not in completed_units
         ]
-        state = self.get_user_state(user_id)
-        is_already_certified = f"{language}_{level}_certified" in state.get(
-            "passed_levels", []
-        )
+        is_already_certified = self.is_level_certified(user_id, language, level)
         return {
             "can_take": can_take,
             "completed_count": len(completed_units),

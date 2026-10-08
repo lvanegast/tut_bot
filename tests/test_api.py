@@ -540,6 +540,59 @@ def test_all_units_have_distinct_exercises_and_no_unwanted_repetition():
     assert tracker.get_user_state(test_user)["active_unit"] == "all"
 
 
+def test_cefr_state_sanitization_and_reset():
+    import json
+    import uuid
+    from tut_bot.services.tracker import tracker
+
+    user_id = f"test_sanitization_{uuid.uuid4().hex[:8]}"
+    tracker.set_user_language(user_id, "de-DE")
+
+    # 1. Simular un estado legado corrupto (A2 desbloqueado sin examen)
+    with tracker._get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE user_states
+            SET unlocked_levels = '["A1", "A2"]',
+                passed_levels = '["de-DE_A1_speaking"]',
+                level = 'A2',
+                fsm_state = 'LEVEL_COMPLETED'
+            WHERE user_id = ?
+            """,
+            (user_id,),
+        )
+        conn.commit()
+
+    # 2. Comprobar que no está certificado
+    assert tracker.is_level_certified(user_id, "de-DE", "A1") is False
+
+    # 3. Forzar inicialización / saneamiento de la BD
+    tracker._init_db()
+
+    # 4. Verificar que se sanitizó limpiamente
+    cleaned = tracker.get_user_state(user_id)
+    assert cleaned["level"] == "A1"
+    assert cleaned["unlocked_levels"] == ["A1"]
+    assert cleaned["fsm_state"] == "IN_EXERCISE"
+
+    # 5. Probar reset_user_progress
+    tracker.reset_user_progress(user_id)
+    reset_state = tracker.get_user_state(user_id)
+    assert reset_state["level"] == "A1"
+    assert reset_state["exercise_index"] == 0
+    assert reset_state["completed_units"] == []
+    assert reset_state["unlocked_levels"] == ["A1"]
+    assert reset_state["fsm_state"] == "IN_EXERCISE"
+
+    # 6. Probar que puede iniciar examen de nivelación directamente
+    exam_session = tracker.start_final_exam(user_id, "de-DE", "A1")
+    assert exam_session is not None
+    assert exam_session["level"] == "A1"
+    assert tracker.get_user_state(user_id)["fsm_state"] == "IN_FINAL_EXAM"
+    tracker.cancel_final_exam(user_id)
+
+
 if __name__ == "__main__":
     test_health_endpoint()
     test_exercises_endpoints()
@@ -556,5 +609,6 @@ if __name__ == "__main__":
     test_curriculum_and_vocabulary_tracking()
     test_conversation_roleplay_service()
     test_all_units_have_distinct_exercises_and_no_unwanted_repetition()
+    test_cefr_state_sanitization_and_reset()
     print("\n[EXITO] Todas las pruebas unitarias pasaron correctamente!")
 

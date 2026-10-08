@@ -286,6 +286,9 @@ class TelegramCoachBot:
         app.add_handler(CommandHandler(["libre", "custom", "fraselibre"], self.cmd_custom_phrase))
         app.add_handler(CommandHandler(["stats", "estadisticas", "progreso"], self.cmd_stats))
         app.add_handler(CommandHandler(["web", "panel", "link", "dashboard"], self.cmd_web))
+        app.add_handler(
+            CommandHandler(["reset", "reiniciar", "borrarprogreso"], self.cmd_reset)
+        )
 
         # Callback queries de botones inline
         app.add_handler(CallbackQueryHandler(self.handle_callback))
@@ -366,6 +369,7 @@ class TelegramCoachBot:
             "• 👂 <b>Comprender:</b> Audición nativa, responder preguntas y aprender vocabulario.\n"
             "• 💬 <b>Conversar:</b> Misiones de rol inmersivas con personajes nativos IA por unidad temática.\n\n"
             f"🌐 <b>Idioma:</b> {lang_flag} | <b>Nivel:</b> {current_level} | <b>Modo:</b> {current_skill}\n\n"
+            "🎓 <b>Certificación Oficial CEFR:</b> Completa las unidades temáticas y aprueba la <b>Evaluación Final</b> para certificar tu nivel y ascender.\n"
             "💡 <i>¿Tienes duda con una palabra? Escribe <code>/palabra término</code> en cualquier momento.</i>"
         )
 
@@ -375,15 +379,19 @@ class TelegramCoachBot:
                 InlineKeyboardButton("📚 Ir al Ejercicio", callback_data="btn_exercise"),
             ],
             [
-                InlineKeyboardButton("💬 Misión de Diálogo", callback_data="mode_conversation"),
+                InlineKeyboardButton(f"📝 Evaluación Final {current_level}", callback_data="btn_exam_entry"),
                 InlineKeyboardButton("📂 Unidades", callback_data="btn_units_menu"),
+            ],
+            [
+                InlineKeyboardButton("💬 Misión de Diálogo", callback_data="mode_conversation"),
+                InlineKeyboardButton("📊 Mis Estadísticas", callback_data="btn_stats"),
             ],
             [
                 InlineKeyboardButton("🇩🇪 Alemán", callback_data="lang_de"),
                 InlineKeyboardButton("🇺🇸 Inglés", callback_data="lang_en"),
             ],
             [
-                InlineKeyboardButton("📊 Mis Estadísticas", callback_data="btn_stats"),
+                InlineKeyboardButton("🔄 Reiniciar Progreso", callback_data="btn_reset_ask"),
                 InlineKeyboardButton("🌐 Panel Web", callback_data="btn_web"),
             ],
         ]
@@ -442,15 +450,16 @@ class TelegramCoachBot:
         )
 
         unlocked = state.get("unlocked_levels", ["A1"])
-        passed = state.get("passed_levels", [])
 
         def get_lvl_label(lvl: str) -> str:
-            if f"{lang}_{lvl}_{current_skill}" in passed:
-                return f"✅ {lvl} (Completado)"
+            if tracker.is_level_certified(user_id, lang, lvl):
+                return f"🎓 {lvl} (Certificado)"
+            elif lvl == current_level:
+                return f"📍 {lvl} (En curso)"
             elif lvl in unlocked:
                 return f"🔓 {lvl} (Desbloqueado)"
             else:
-                return f"🔒 {lvl}"
+                return f"🔒 {lvl} (Bloqueado)"
 
         keyboard = [
             [
@@ -467,7 +476,10 @@ class TelegramCoachBot:
                 InlineKeyboardButton(get_lvl_label("B1"), callback_data="level_B1"),
             ],
             [
-                InlineKeyboardButton("📂 Seleccionar Unidad Temática", callback_data="btn_units_menu"),
+                InlineKeyboardButton(
+                    f"📝 Rendir Evaluación Final {current_level}", callback_data="btn_exam_entry"
+                ),
+                InlineKeyboardButton("📂 Seleccionar Unidad", callback_data="btn_units_menu"),
             ],
             [
                 InlineKeyboardButton("📚 Ir al Ejercicio", callback_data="btn_exercise"),
@@ -626,24 +638,31 @@ class TelegramCoachBot:
             "🎉 <i>Tus ejercicios han sido registrados en tu historial.</i>\n",
         ]
 
+        is_certified = tracker.is_level_certified(user_id, lang, level)
         keyboard = []
-        if next_level in unlocked:
+        if is_certified and next_level in unlocked:
             lines.append(f"🚀 <b>¡Ya tienes certificado y desbloqueado el Nivel {next_level}!</b>")
             keyboard.append([
                 InlineKeyboardButton(f"🚀 Ir a Nivel {next_level}", callback_data=f"fsm_ascend_{next_level}")
             ])
-        elif req["can_take"]:
-            lines.append("🎓 <b>¡Tienes las 6 unidades oficiales completadas!</b>")
-            lines.append(f"Para ascender a {next_level}, rinde la Evaluación Final Oficial:")
+            keyboard.append([
+                InlineKeyboardButton(f"🔄 Reintentar Evaluación {level}", callback_data=f"exam_start_{level}")
+            ])
+        else:
+            lines.append("🎓 <b>Evaluación Final Oficial:</b>")
+            lines.append(
+                f"Para certificar formalmente tus conocimientos y desbloquear el Nivel {next_level}, rinde la Evaluación Final:"
+            )
             keyboard.append([
                 InlineKeyboardButton(f"📝 Rendir Evaluación Final {level}", callback_data=f"exam_start_{level}")
             ])
-        else:
-            lines.append(f"📊 <b>Progreso de Temas en Nivel {level}:</b> {req['completed_count']} / {req['total_units']} unidades aprobadas.")
-            lines.append(f"<i>Para desbloquear el Nivel {next_level}, debes completar los temas pendientes y aprobar la Evaluación Final.</i>")
-            keyboard.append([
-                InlineKeyboardButton("📂 Ver Temas Pendientes", callback_data="btn_units_menu")
-            ])
+            if not req["can_take"]:
+                lines.append(
+                    f"📊 <i>Progreso de Temas: {req['completed_count']} / {req['total_units']} unidades aprobadas.</i>"
+                )
+                keyboard.append([
+                    InlineKeyboardButton("📂 Ver Temas Pendientes", callback_data="btn_units_menu")
+                ])
 
         keyboard.extend([
             [
@@ -728,20 +747,40 @@ class TelegramCoachBot:
         state = tracker.get_user_state(user_id)
         lang = state["language"]
         level = state.get("level", "A1")
+        lang_name = "🇩🇪 Alemán" if lang.startswith("de") else "🇺🇸 Inglés"
+        exam_name = "Goethe Start Deutsch 1" if lang.startswith("de") else "Cambridge A1 Key"
 
+        is_certified = tracker.is_level_certified(user_id, lang, level)
         req = tracker.can_take_final_exam(user_id, lang, level)
-        if not req["can_take"]:
-            lang_name = "🇩🇪 Alemán" if lang.startswith("de") else "🇺🇸 Inglés"
+
+        if is_certified:
+            next_lvl = "A2" if level == "A1" else ("B1" if level == "A2" else None)
             msg = (
-                f"🔒 <b>Evaluación Final {level} ({lang_name}) no disponible aún</b>\n\n"
-                f"Para rendir la Evaluación Final y poder ascender al siguiente nivel, debes completar las <b>6 Unidades Temáticas oficiales</b> de {level}.\n\n"
-                f"📊 <b>Tu progreso actual:</b>\n"
-                f"• Unidades completadas: <b>{req['completed_count']} / {req['total_units']}</b>\n"
+                f"🎓 <b>NIVEL {level} CERTIFICADO CON ÉXITO ({lang_name})</b>\n\n"
+                f"¡Ya has aprobado oficialmente la Evaluación de Nivel {level} ({exam_name})!\n\n"
+                f"Puedes comenzar a entrenar el siguiente nivel o reintentar el examen para mejorar tu calificación."
+            )
+            buttons = []
+            if next_lvl:
+                buttons.append([InlineKeyboardButton(f"🚀 Ir a Nivel {next_lvl}", callback_data=f"fsm_ascend_{next_lvl}")])
+            buttons.append([InlineKeyboardButton(f"🔄 Reintentar Evaluación {level}", callback_data=f"exam_start_{level}")])
+            buttons.append([InlineKeyboardButton("🏠 Menú Principal", callback_data="btn_start_menu")])
+            await self._safe_reply_text(update.effective_message, msg, reply_markup=InlineKeyboardMarkup(buttons))
+            return
+
+        if not req["can_take"]:
+            msg = (
+                f"📝 <b>EVALUACIÓN OFICIAL DE NIVEL {level} ({lang_name})</b>\n"
+                f"<i>Estándar oficial: {exam_name} (Aprobación mínima: 75%)</i>\n\n"
+                f"📊 <b>Progreso Curricular:</b> <b>{req['completed_count']} de {req['total_units']}</b> unidades completadas.\n"
                 f"• Temas pendientes: <i>{', '.join(req['missing_units'])}</i>\n\n"
-                f"💡 <i>Continúa practicando los temas pendientes con /temas o /ejercicio para desbloquear tu examen de graduación.</i>"
+                f"💡 <b>Recomendación Pedagógica:</b> Se aconseja completar todas las unidades antes del examen. "
+                f"Sin embargo, si posees conocimientos previos y deseas medir tu nivel o certificarlo por suficiencia, "
+                f"puedes rendir la evaluación ahora mismo."
             )
             keyboard = [
-                [InlineKeyboardButton("📂 Ver Unidades Temáticas", callback_data="btn_units_menu")],
+                [InlineKeyboardButton(f"📝 Rendir Evaluación {level} Ahora", callback_data=f"exam_start_{level}")],
+                [InlineKeyboardButton("📂 Practicar Temas Pendientes", callback_data="btn_units_menu")],
                 [InlineKeyboardButton("📚 Ir al Ejercicio", callback_data="btn_exercise")],
             ]
             await self._safe_reply_text(update.effective_message, msg, reply_markup=InlineKeyboardMarkup(keyboard))
@@ -934,6 +973,23 @@ class TelegramCoachBot:
                 await self._safe_send_chat_message(update.effective_chat, msg_text, reply_markup=reply_markup)
         else:
             await self._safe_send_chat_message(update.effective_chat, msg_text, reply_markup=reply_markup)
+
+    async def cmd_reset(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Muestra confirmación para reiniciar progreso a cero."""
+        msg = (
+            "⚠️ <b>¿Deseas reiniciar tu progreso pedagógico?</b>\n\n"
+            "Esta acción restablecerá tu nivel a <b>A1 inicial</b>, desmarcará unidades y ejercicios completados "
+            "y te permitirá comenzar de cero con todas las evaluaciones disponibles."
+        )
+        keyboard = [
+            [
+                InlineKeyboardButton("🔄 Sí, Reiniciar a Cero", callback_data="btn_reset_confirm"),
+                InlineKeyboardButton("❌ Cancelar", callback_data="btn_start_menu"),
+            ]
+        ]
+        await self._safe_reply_text(
+            update.effective_message, msg, reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
     async def cmd_conversation(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Inicia o retoma una misión de conversación interactiva (roleplay con IA)."""
@@ -1350,8 +1406,13 @@ class TelegramCoachBot:
         fsm_state = state.get("fsm_state", "IN_EXERCISE")
         idx = state.get("exercise_index", 0)
 
-        # Si el usuario ya completó el nivel, mostrar tarjeta de graduación en lugar de ciclar
-        if fsm_state == "LEVEL_COMPLETED" or idx >= len(exercises):
+        # Si el índice quedó fuera de rango por cambio de unidad o filtro, resetear a 0
+        if idx >= len(exercises):
+            tracker.set_user_exercise_index(user_id, 0)
+            idx = 0
+
+        # Si el usuario ya completó el nivel o las 6 unidades según la FSM, mostrar tarjeta de graduación
+        if fsm_state == "LEVEL_COMPLETED" or fsm_state == "READY_FOR_FINAL_EXAM":
             advance_info = {
                 "language": lang,
                 "level": level,
@@ -1752,18 +1813,38 @@ class TelegramCoachBot:
                 )
                 await self._send_exercise_card(update, user_id, edit_message=False)
 
+        elif data == "btn_exam_entry":
+            await self.cmd_exam(update, context)
+
+        elif data == "btn_reset_ask":
+            await self.cmd_reset(update, context)
+
+        elif data == "btn_reset_confirm":
+            state = tracker.get_user_state(user_id)
+            tracker.reset_user_progress(user_id, state["language"])
+            msg = (
+                "🔄 <b>¡Progreso reiniciado con éxito!</b>\n\n"
+                "• Nivel: <b>A1</b>\n"
+                "• Unidades completadas: <b>0 / 6</b>\n"
+                "• Habilidad: <b>Hablar</b>\n\n"
+                "Comienza tus ejercicios desde la Unidad 1 o rinde la Evaluación de Nivelación cuando desees."
+            )
+            keyboard = [
+                [
+                    InlineKeyboardButton("📚 Ir al Ejercicio 1", callback_data="btn_exercise"),
+                    InlineKeyboardButton("📝 Evaluación Final A1", callback_data="btn_exam_entry"),
+                ],
+                [InlineKeyboardButton("🏠 Menú Principal", callback_data="btn_start_menu")],
+            ]
+            await self._safe_edit_text(query, msg, reply_markup=InlineKeyboardMarkup(keyboard))
+
         elif data.startswith("exam_start_"):
             target_lvl = data.replace("exam_start_", "")
-            req = tracker.can_take_final_exam(user_id, state["language"], target_lvl)
-            if not req["can_take"]:
-                await query.answer(
-                    f"🔒 Completa las 6 unidades de {target_lvl} (llevas {req['completed_count']}/6) antes de rendir el examen.",
-                    show_alert=True,
-                )
-                return
             exam_session = tracker.start_final_exam(user_id, state["language"], target_lvl)
             if exam_session:
                 await self._send_exam_question_card(update, user_id, exam_session, edit_message=True)
+            else:
+                await query.answer("No se encontró examen para este nivel.", show_alert=True)
 
         elif data.startswith("exam_opt_"):
             opt_idx = int(data.replace("exam_opt_", ""))
