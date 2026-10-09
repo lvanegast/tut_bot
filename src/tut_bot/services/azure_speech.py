@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import random
+import time
 from typing import List, Optional
 
 from tut_bot.config import settings
@@ -108,7 +109,10 @@ class AzureSpeechService:
     assess_pronunciation = evaluate_pronunciation
 
     def transcribe_speech(self, wav_path: str, language: str = "de-DE") -> str:
-        """Transcribe voz libre a texto usando Azure Speech STT."""
+        """
+        Transcribe voz libre a texto usando Azure Speech STT.
+        Aplica reconocimiento continuo para transcribir el audio completo sin cortar pausas naturales.
+        """
         fallback = (
             "Ich möchte bitte zwei Brötchen und einen Kaffee."
             if language.startswith("de")
@@ -121,16 +125,60 @@ class AzureSpeechService:
         try:
             speech_config = speechsdk.SpeechConfig(subscription=self.key, region=self.region)
             speech_config.speech_recognition_language = language
+
+            # Ajustar tolerancias de silencio para no cortar pausas de vacilación en alumnos
+            speech_config.set_property(
+                speechsdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, "2500"
+            )
+            speech_config.set_property(
+                speechsdk.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, "3000"
+            )
+            speech_config.set_property(
+                speechsdk.PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs, "5000"
+            )
+
             audio_config = speechsdk.audio.AudioConfig(filename=wav_path)
             recognizer = speechsdk.SpeechRecognizer(
                 speech_config=speech_config, language=language, audio_config=audio_config
             )
+
+            text_segments: List[str] = []
+            done = False
+
+            def on_recognized(evt):
+                if evt.result.reason == speechsdk.ResultReason.RecognizedSpeech and evt.result.text:
+                    clean = evt.result.text.strip()
+                    if clean:
+                        text_segments.append(clean)
+
+            def on_stop(evt):
+                nonlocal done
+                done = True
+
+            recognizer.recognized.connect(on_recognized)
+            recognizer.session_stopped.connect(on_stop)
+            recognizer.canceled.connect(on_stop)
+
+            recognizer.start_continuous_recognition()
+            t0 = time.time()
+            # Esperar hasta que termine el archivo WAV (máximo 15 segundos)
+            while not done and (time.time() - t0 < 15.0):
+                time.sleep(0.05)
+            recognizer.stop_continuous_recognition()
+
+            if text_segments:
+                full_text = " ".join(text_segments).strip()
+                logger.info(f"Transcripción continua Azure ({language}): '{full_text}'")
+                return full_text
+
+            # Fallback a recognize_once por si continuous recognition no devolvió segmentos
             result = recognizer.recognize_once()
             if result.reason == speechsdk.ResultReason.RecognizedSpeech and result.text:
-                return result.text
+                return result.text.strip()
+
             return fallback
         except Exception as e:
-            logger.error(f"Error transcribiendo voz libre en Azure: {e}")
+            logger.error(f"Error transcribiendo voz libre en Azure: {e}", exc_info=True)
             return fallback
 
     def synthesize_speech(

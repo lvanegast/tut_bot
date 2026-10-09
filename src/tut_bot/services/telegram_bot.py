@@ -922,7 +922,6 @@ class TelegramCoachBot:
         state = tracker.get_user_state(user_id)
         lang = info.get("language") or state["language"]
         level = info.get("level") or state.get("level", "A1")
-        skill = info.get("skill_mode") or state.get("skill_mode", "speaking")
         completed_unit = info.get("completed_unit", "unit_1")
         next_unit = info.get("next_unit")
         units_done = info.get("units_completed_count", 1)
@@ -1114,6 +1113,7 @@ class TelegramCoachBot:
         user_id: str,
         user_text: str,
         is_audio: bool = False,
+        status_msg: Optional[Any] = None,
     ):
         """Procesa una intervención del alumno en el diálogo de roleplay."""
         state = tracker.get_user_state(user_id)
@@ -1175,8 +1175,10 @@ class TelegramCoachBot:
 
         user_turn_count = sum(1 for t in dialogue_history if t.get("role") == "user") + 1
 
+        user_header = f'🗣️ <b>Tú:</b> <i>"{user_text}"</i>\n\n' if is_audio else ""
         msg = (
-            f"👤 <b>{scen.character_name}:</b>\n"
+            user_header
+            + f"👤 <b>{scen.character_name}:</b>\n"
             f'"{char_reply}"\n'
             f"<tg-spoiler><i>🇪🇸 {char_es}</i></tg-spoiler>\n"
             f"{tip_str}\n"
@@ -1199,10 +1201,9 @@ class TelegramCoachBot:
         ]
 
         if is_goal_achieved:
-            msg = (
-                f"🎉 <b>¡Misión conversacional completada!</b>\n\n"
-                + msg
-                + "\n\n<i>Has cubierto el objetivo de la escena. Puedes revisar tu debriefing pedagógico o continuar charlando libremente:</i>"
+            msg += (
+                "\n\n🎉 <b>¡Objetivo de la misión cumplido!</b>\n"
+                "<i>Has completado la meta pedagógica. Puedes ver tu evaluación o seguir charlando libremente:</i>"
             )
             keyboard.append([
                 InlineKeyboardButton("🏆 Ver Informe y Evaluación", callback_data="conv_finish"),
@@ -1217,11 +1218,25 @@ class TelegramCoachBot:
         keyboard.append([
             InlineKeyboardButton("🎯 Cambiar Modo", callback_data="btn_mode_menu"),
         ])
-        await self._safe_reply_text(
-            update.effective_message,
-            msg,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-        )
+
+        if status_msg is not None:
+            edited = await self._safe_edit_text(
+                status_msg,
+                msg,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+            )
+            if not edited:
+                await self._safe_reply_text(
+                    update.effective_message,
+                    msg,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                )
+        else:
+            await self._safe_reply_text(
+                update.effective_message,
+                msg,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+            )
 
     async def _finish_conversation_mission(
         self,
@@ -2589,10 +2604,10 @@ class TelegramCoachBot:
                 await self._safe_edit_text(
                     status_msg,
                     f'🗣️ <b>Dijiste:</b> <i>"{transcription}"</i>\n'
-                    "<i>Procesando respuesta del personaje...</i>",
+                    "<i>Consultando respuesta del interlocutor...</i>",
                 )
                 await self._handle_conversation_turn(
-                    update, user_id, user_text=transcription, is_audio=True
+                    update, user_id, user_text=transcription, is_audio=True, status_msg=status_msg
                 )
             except Exception as e:
                 logger.error(f"Error procesando voz en conversación: {e}", exc_info=True)

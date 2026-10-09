@@ -232,6 +232,7 @@ def test_telegram_bot_service():
 
 def test_fsm_progression_and_level_graduation():
     import uuid
+
     from tut_bot.services.tracker import tracker
 
     user_id = f"test_fsm_user_flow_{uuid.uuid4().hex[:8]}"
@@ -276,6 +277,7 @@ def test_fsm_progression_and_level_graduation():
 
 def test_fsm_unit_progression_requires_all_6_units_and_final_exam():
     import uuid
+
     from tut_bot.services.final_exam import get_level_exam
     from tut_bot.services.tracker import tracker
 
@@ -541,8 +543,8 @@ def test_all_units_have_distinct_exercises_and_no_unwanted_repetition():
 
 
 def test_cefr_state_sanitization_and_reset():
-    import json
     import uuid
+
     from tut_bot.services.tracker import tracker
 
     user_id = f"test_sanitization_{uuid.uuid4().hex[:8]}"
