@@ -605,6 +605,10 @@ class TelegramCoachBot:
 
     async def cmd_exercise(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = f"tg_{update.effective_user.id}"
+        state = tracker.get_user_state(user_id)
+        if state.get("skill_mode") == "conversation":
+            tracker.set_user_skill_mode(user_id, "speaking")
+        tracker.set_fsm_state(user_id, "IN_EXERCISE")
         await self._send_exercise_card(update, user_id)
 
     async def _send_level_completed_card(
@@ -1706,6 +1710,10 @@ class TelegramCoachBot:
             await self.cmd_start(update, context)
 
         elif data == "btn_exercise":
+            state = tracker.get_user_state(user_id)
+            if state.get("skill_mode") == "conversation":
+                tracker.set_user_skill_mode(user_id, "speaking")
+            tracker.set_fsm_state(user_id, "IN_EXERCISE")
             await self._send_exercise_card(update, user_id, edit_message=True)
 
         elif data == "btn_stats":
@@ -1776,6 +1784,7 @@ class TelegramCoachBot:
             if new_mode == "conversation":
                 await self._send_conversation_mission_card(update, user_id, edit_message=False)
             else:
+                tracker.set_fsm_state(user_id, "IN_EXERCISE")
                 await self._send_exercise_card(update, user_id, edit_message=False)
 
         elif data == "conv_finish":
