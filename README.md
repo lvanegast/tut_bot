@@ -154,3 +154,17 @@ Como el servidor se enlaza a `0.0.0.0`, puedes practicar cómodamente hablando a
 1. Conecta tu móvil a la misma red Wi-Fi de tu computadora o Jetson Nano.
 2. Averigua la IP local de tu máquina (en Windows: `ipconfig`, en Linux/Jetson: `hostname -I`).
 3. En el navegador de tu móvil (Chrome/Safari), entra a `http://<IP_LOCAL>:8000`.
+
+---
+
+## 🏛️ Arquitectura Pedagógica y Trazabilidad de Referencias
+
+La experiencia conversacional y el motor pedagógico de `tut_bot` integran las mejores prácticas de la teoría de Adquisición de Segundas Lenguas (**SLA - Second Language Acquisition**) y se inspiran directamente en los siguientes proyectos y arquitecturas de código abierto:
+
+| Repositorio / Proyecto de Referencia | Patrón de Diseño Adoptado en `tut_bot` | Impacto en la Experiencia de Usuario |
+| :--- | :--- | :--- |
+| **[`artcc/freelingo`](https://github.com/artcc/freelingo)** | **Conversación de baja presión y reducción del filtro afectivo:** Superación del síndrome del "examinador constante". Se prioriza la comunicación fluida y situaciones de vida real por encima de la evaluación punitiva continua. | El alumno se siente en confianza, seguro para cometer errores y motivado a hablar sin miedo a ser calificado numéricamente a cada paso. |
+| **[`vertexais/large-language-tutor`](https://github.com/vertexais/large-language-tutor)** | **Arquitectura Multi-Tarea Desacoplada (Dual Persona):** Desacoplamiento estricto entre el *Interlocutor Inmersivo* (Language Buddy) y el *Coach Pedagógico Invisible*. | El personaje nunca rompe la cuarta pared para dar lecciones gramaticales a mitad del diálogo. Las correcciones se ofrecen de forma discreta o al finalizar la misión. |
+| **[`CipherCraze/SpeakGenie-AI-Tutor`](https://github.com/CipherCraze/SpeakGenie-AI-Tutor)** | **Andamiaje Dinámico (*Smart Scaffolding*) y Soporte Bilingüe Empático:** Generación en cada turno de opciones guiadas de respuesta rápida (`suggested_replies`) y traducción accesible oculta. | Resuelve la parálisis y timidez del principiante mediante el botón interactivo `💡 ¿Qué puedo responder?` con popups inmediatos. |
+| **[`team-langbot/conversationally`](https://github.com/team-langbot/conversationally)** | **Coherencia Pragmática y *Recasting* Implícito:** Mantenimiento activo del hilo comunicativo integrando correcciones de forma natural dentro de la réplica del bot sin frenar la charla. | El alumno absorbe las estructuras gramaticales correctas de forma inconsciente y natural (modelo nativo) mientras sostiene una conversación real. |
+

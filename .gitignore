@@ -9,4 +9,5 @@ venv/
 .pytest_cache/
 *.db
 data/*.db
+scratch/
 

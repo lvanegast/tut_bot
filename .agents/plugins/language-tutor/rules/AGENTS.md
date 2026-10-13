@@ -28,6 +28,18 @@ Todo ejercicio, drill o diálogo debe respetar los estándares oficiales de exam
     1. `🔊 Escuchar (1.0x)`: Velocidad nativa estándar.
     2. `🐢 Escuchar Lento (0.8x)`: Velocidad pausada mediante SSML (`prosody rate='-20%'`) para captar terminaciones y fonemas sin distorsión tonal.
 
+## 2.1 Pedagogía Conversacional SLA y Arquitectura de Agente Amigable (Trazabilidad Open Source)
+Para erradicar la sensación fría, rígida y escolar en las conversaciones de rol, el bot adopta estrictamente la síntesis de 4 patrones probados en la literatura y proyectos abiertos:
+1. **Baja Presión y Reducción del Filtro Afectivo (`artcc/freelingo`):**
+   - Prohibido emitir notas numéricas intimidantes o interrumpir con evaluaciones punitivas a cada turno del chat.
+   - Tratar al alumno como un interlocutor válido, priorizando el intercambio comunicativo real sobre la perfección formal.
+2. **Arquitectura Dual Desacoplada (`vertexais/large-language-tutor`):**
+   - Separación de responsabilidades: el **Interlocutor (Language Buddy)** mantiene la inmersión total en el papel sin dar cátedra, mientras que el **Coach Pedagógico** opera de fondo proporcionando tips discretos o debriefing al final.
+3. **Andamiaje Dinámico (*Smart Scaffolding*, `CipherCraze/SpeakGenie-AI-Tutor`):**
+   - Toda intervención conversacional debe proveer `suggested_replies` (2 a 3 opciones accesibles) y exponer el botón `💡 ¿Qué puedo responder?` para prevenir bloqueos por timidez o desconocimiento de vocabulario.
+4. **Coherencia Pragmática y *Recasting* Implícito (`team-langbot/conversationally`):**
+   - Ante errores leves del alumno, el personaje reformula de manera natural y afirmativa la oración correcta dentro de su propia réplica sin decir "te equivocaste", manteniendo viva la conversación.
+
 ## 3. Lingüística Contrastiva (Español L1 ➔ Alemán / Inglés L2)
 - Nunca asumir que un sonido es "obvio". Los hispanohablantes no diferencian de forma nativa:
   - Consonante bilabial /b/ de labiodental /v/.

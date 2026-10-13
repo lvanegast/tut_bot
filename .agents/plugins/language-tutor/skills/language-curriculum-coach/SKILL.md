@@ -74,15 +74,21 @@ Responde ÚNICAMENTE en JSON con los campos:
 
 ---
 
-## 4. Próxima Fase de Evolución: Modo Conversación con Rol (Roleplay)
+## 4. Modo Conversación con Rol (Roleplay Inmersivo y Amigable)
 
-Inspirado en el repositorio **Language-Loop** y **FreeLingo**, el modo conversación debe incorporar:
-1. **Escenarios inmersivos:**
-   - ☕ *En la cafetería:* Pedir café y pagar con tarjeta.
-   - 🚆 *En la taquilla de la estación:* Comprar billete y consultar retrasos.
-   - 🏨 *Check-in en el hotel:* Solicitar habitación silenciosa y contraseña de Wi-Fi.
-   - 💼 *Entrevista de trabajo corta:* Describir experiencia previa y motivaciones.
-2. **Ciclo de Turno Conversacional:**
-   - Bot envía nota de voz nativa (TTS) + texto con traducción oculta en spoiler.
-   - Usuario responde con nota de voz o texto.
-   - Bot evalúa en paralelo: Fluidez conversacional + correcciones sutiles al final sin romper la inmersión del personaje.
+Inspirado en la síntesis de **FreeLingo**, **Large-Language-Tutor**, **SpeakGenie** y **Conversationally**, el modo conversación se estructura bajo los siguientes pilares de diseño:
+
+1. **Escenarios Situacionales A1/A2:**
+   - ☕ *En la panadería/cafetería:* Pedir café y panecillos, pagar en efectivo o con tarjeta.
+   - 🚆 *En la estación de tren:* Consultar andenes, direcciones y horarios de salida.
+   - 🏨 *En la recepción del curso / hotel:* Presentarse, indicar origen y deletrear nombre.
+   - 🩺 *En la farmacia / consulta:* Describir un malestar cotidiano y pedir recomendación.
+2. **Ciclo de Turno con *Recasting* y Baja Presión (`team-langbot/conversationally` + `artcc/freelingo`):**
+   - El bot responde como un compañero de charla entusiasta y empático.
+   - Si el alumno comete un error, el personaje modela la forma correcta dentro de su réplica sin interrumpir ni regañar.
+   - Envío de audio nativo (TTS normal y 0.8x lento) + texto con traducción oculta en `<tg-spoiler>`.
+3. **Andamiaje Dinámico (*Smart Scaffolding*, `CipherCraze/SpeakGenie-AI-Tutor`):**
+   - Cada turno provee `suggested_replies` (2-3 ideas de respuesta rápida).
+   - El alumno puede pulsar `💡 ¿Qué puedo responder?` para recibir un diálogo emergente inmediato que disipa bloqueos.
+4. **Desacoplamiento de Roles (`vertexais/large-language-tutor`):**
+   - El personaje nunca abandona su papel para calificar o regañar. La evaluación formal queda diferida al debriefing final (`/finalizar` o cumplimiento de objetivo) con fortalezas y consejos constructivos.

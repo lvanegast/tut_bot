@@ -1031,6 +1031,7 @@ class TelegramCoachBot:
                 character_name=scen.character_name,
                 initial_greeting=scen.initial_greeting,
                 initial_greeting_es=scen.initial_greeting_es,
+                suggested_replies=scen.target_phrases[:3],
             )
 
         turns = active_conv.get("turns", [])
@@ -1086,6 +1087,11 @@ class TelegramCoachBot:
                 ),
                 InlineKeyboardButton(
                     "🐢 Escuchar Lento", callback_data=f"conv_tts_slow_{scen.id}"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "💡 ¿Qué puedo responder?", callback_data="conv_hint_0"
                 ),
             ],
             [
@@ -1165,28 +1171,29 @@ class TelegramCoachBot:
         # 4. Registrar turno del personaje
         char_reply = reply_data.get("reply_native", "")
         char_es = reply_data.get("reply_es", "")
+        suggested_replies = reply_data.get("suggested_replies") or []
+        feedback_tip = reply_data.get("feedback_tip")
+
         tracker.append_conversation_turn(
             user_id=user_id,
             role="character",
             text=char_reply,
             text_es=char_es,
             name=scen.character_name,
+            suggested_replies=suggested_replies,
         )
-
-        # 5. Formatear la réplica
-        feedback_tip = reply_data.get("feedback_tip")
-        tip_str = f"\n💡 <i>Consejo: {feedback_tip}</i>\n" if feedback_tip else ""
 
         user_turn_count = sum(1 for t in dialogue_history if t.get("role") == "user") + 1
 
         user_header = f'🗣️ <b>Tú:</b> <i>"{user_text}"</i>\n\n' if is_audio else ""
+        tip_str = f"\n\n✨ <i>Tip amigable: {feedback_tip}</i>" if feedback_tip else ""
+
         msg = (
             user_header
             + f"👤 <b>{scen.character_name}:</b>\n"
-            f'"{char_reply}"\n'
-            f"<tg-spoiler><i>🇪🇸 {char_es}</i></tg-spoiler>\n"
-            f"{tip_str}\n"
-            f"<i>(Intercambio {user_turn_count})</i>"
+            f'"{char_reply}"\n\n'
+            f"<tg-spoiler><i>🇪🇸 {char_es}</i></tg-spoiler>"
+            f"{tip_str}"
         )
 
         is_goal_achieved = reply_data.get("mission_status") == "goal_achieved"
@@ -1202,16 +1209,22 @@ class TelegramCoachBot:
                     callback_data=f"conv_tts_slowrep_{user_turn_count}",
                 ),
             ],
+            [
+                InlineKeyboardButton(
+                    "💡 ¿Qué puedo responder?",
+                    callback_data=f"conv_hint_{user_turn_count}",
+                ),
+            ],
         ]
 
         if is_goal_achieved:
             msg += (
-                "\n\n🎉 <b>¡Objetivo de la misión cumplido!</b>\n"
-                "<i>Has completado la meta pedagógica. Puedes ver tu evaluación o seguir charlando libremente:</i>"
+                "\n\n🎉 <b>¡Misión completada con éxito!</b>\n"
+                "<i>Has alcanzado el objetivo de la charla. Puedes ver tu evaluación o seguir conversando:</i>"
             )
             keyboard.append([
                 InlineKeyboardButton("🏆 Ver Informe y Evaluación", callback_data="conv_finish"),
-                InlineKeyboardButton("🔄 Reiniciar Escenario", callback_data="conv_restart"),
+                InlineKeyboardButton("🔄 Repetir Escenario", callback_data="conv_restart"),
             ])
         else:
             keyboard.append([
@@ -1811,6 +1824,32 @@ class TelegramCoachBot:
         elif data.startswith("conv_tts_"):
             slow = "slow" in data
             await self._send_conversation_tts(query, user_id, slow=slow)
+
+        elif data.startswith("conv_hint"):
+            active_conv = tracker.get_active_conversation(user_id)
+            replies = []
+            if active_conv:
+                turns = active_conv.get("turns", [])
+                char_turns = [t for t in turns if t.get("role") == "character"]
+                if char_turns and char_turns[-1].get("suggested_replies"):
+                    replies = char_turns[-1].get("suggested_replies")
+            if not replies:
+                state = tracker.get_user_state(user_id)
+                scen = get_scenario_by_id(
+                    active_conv["scenario_id"] if active_conv else "scen_1",
+                    state["language"],
+                    state.get("level", "A1"),
+                )
+                if scen:
+                    replies = scen.target_phrases[:3]
+                else:
+                    replies = ["Ja, gerne!", "Nein, danke."]
+
+            hint_lines = "\n".join([f"• {r}" for r in replies])
+            await query.answer(
+                f"💡 Ideas para responder:\n\n{hint_lines}\n\n(Escríbela o envíala por audio)",
+                show_alert=True,
+            )
 
         elif data.startswith("level_"):
             new_level = data.replace("level_", "")

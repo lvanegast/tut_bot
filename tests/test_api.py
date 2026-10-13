@@ -469,6 +469,8 @@ def test_conversation_roleplay_service():
     assert "reply_native" in reply
     assert "reply_es" in reply
     assert reply["mission_status"] in ("in_progress", "goal_achieved")
+    assert "suggested_replies" in reply
+    assert len(reply["suggested_replies"]) >= 2
 
     # Registrar réplica del personaje
     tracker.append_conversation_turn(
@@ -477,6 +479,7 @@ def test_conversation_roleplay_service():
         text=reply["reply_native"],
         text_es=reply["reply_es"],
         name=scen.character_name,
+        suggested_replies=reply["suggested_replies"],
     )
 
     # Verificar historial actualizado

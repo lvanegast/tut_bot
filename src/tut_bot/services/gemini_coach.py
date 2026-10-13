@@ -425,82 +425,82 @@ class GeminiCoachService:
 
         user_turn_count = sum(1 for t in dialogue_history if t.get("role") == "user")
 
-        # Fallbacks contextuales por personaje y escenario si no hay conexión o falla Gemini
+        # Fallbacks contextuales por personaje y escenario con andamiaje dinámico (suggested_replies)
         scenario_flows_de = {
             "Frau Müller": [
-                ("Guten Tag! Herzlich willkommen im Kurs. Wie heißen Sie?", "¡Buenas tardes! Bienvenido/a al curso. ¿Cómo se llama usted?"),
-                ("Sehr schön! Und woher kommen Sie?", "¡Muy bien! ¿Y de dónde viene usted?"),
-                ("Ausgezeichnet. Können Sie bitte Ihren Namen buchstabieren?", "Excelente. ¿Puede deletrear su nombre por favor?"),
-                ("Vielen Dank! Herzlich willkommen. Nehmen Sie bitte Platz.", "¡Muchas gracias! Bienvenido/a. Tome asiento por favor."),
+                ("Guten Tag! Herzlich willkommen im Kurs. Wie heißen Sie?", "¡Buenas tardes! Bienvenido/a al curso. ¿Cómo se llama usted?", ["Ich heiße...", "Mein Name ist..."]),
+                ("Sehr schön! Und woher kommen Sie?", "¡Muy bien! ¿Y de dónde viene usted?", ["Ich komme aus Spanien.", "Aus Mexiko, und Sie?"]),
+                ("Ausgezeichnet. Können Sie bitte Ihren Namen buchstabieren?", "Excelente. ¿Puede deletrear su nombre por favor?", ["Ja, gerne.", "Klar!"]),
+                ("Vielen Dank! Herzlich willkommen. Nehmen Sie bitte Platz.", "¡Muchas gracias! Bienvenido/a. Tome asiento por favor.", ["Danke schön!", "Vielen Dank!"]),
             ],
             "Herr Schmidt": [
-                ("Guten Morgen! Was möchten Sie bitte?", "¡Buenos días! ¿Qué desea por favor?"),
-                ("Sehr gerne! Zwei Brötchen. Möchten Sie auch einen Kaffee?", "¡Con gusto! Dos panecillos. ¿Desea también un café?"),
-                ("Das macht vier Euro bitte. Zahlen Sie bar oder mit Karte?", "Son cuatro euros por favor. ¿Paga en efectivo o con tarjeta?"),
-                ("Vielen Dank! Einen schönen Tag noch!", "¡Muchas gracias! ¡Que tenga un buen día!"),
+                ("Guten Morgen! Was möchten Sie bitte?", "¡Buenos días! ¿Qué desea por favor?", ["Ich möchte zwei Brötchen bitte.", "Einen Kaffee bitte!"]),
+                ("Sehr gerne! Zwei Brötchen. Möchten Sie auch einen Kaffee?", "¡Con gusto! Dos panecillos. ¿Desea también un café?", ["Ja, bitte!", "Nein danke, nur die Brötchen."]),
+                ("Das macht vier Euro bitte. Zahlen Sie bar oder mit Karte?", "Son cuatro euros por favor. ¿Paga en efectivo o con tarjeta?", ["Ich zahle bar.", "Mit Karte bitte."]),
+                ("Vielen Dank! Einen schönen Tag noch!", "¡Muchas gracias! ¡Que tenga un buen día!", ["Danke, gleichfalls!", "Tschüss!"]),
             ],
             "Lukas": [
-                ("Hallo! Freut mich. Wie heißt du?", "¡Hola! Mucho gusto. ¿Cómo te llamas?"),
-                ("Schön! Und woher kommst du?", "¡Genial! ¿Y de dónde eres?"),
-                ("Interessant! Hast du Geschwister?", "¡Interesante! ¿Tienes hermanos?"),
-                ("Super! Schön dich kennenzulernen!", "¡Súper! ¡Un gusto conocerte!"),
+                ("Hallo! Freut mich. Wie heißt du?", "¡Hola! Mucho gusto. ¿Cómo te llamas?", ["Hallo! Ich bin...", "Freut mich! Ich heiße..."]),
+                ("Schön! Und woher kommst du?", "¡Genial! ¿Y de dónde eres?", ["Ich komme aus Kolumbien.", "Aus Spanien, und du?"]),
+                ("Interessant! Hast du Geschwister?", "¡Interesante! ¿Tienes hermanos?", ["Ja, einen Bruder.", "Nein, ich habe keine Geschwister."]),
+                ("Super! Schön dich kennenzulernen!", "¡Súper! ¡Un gusto conocerte!", ["Gleichfalls!", "Bis bald!"]),
             ],
             "Anna": [
-                ("Hallo! Hast du am Samstag Zeit?", "¡Hola! ¿Tienes tiempo el sábado?"),
-                ("Super! Um wie viel Uhr treffen wir uns?", "¡Estupendo! ¿A qué hora nos encontramos?"),
-                ("Das passt mir gut! Wo treffen wir uns?", "¡Me viene muy bien! ¿Dónde nos encontramos?"),
-                ("Perfekt! Dann bis Samstag. Tschüss!", "¡Perfecto! Entonces hasta el sábado. ¡Chao!"),
+                ("Hallo! Hast du am Samstag Zeit?", "¡Hola! ¿Tienes tiempo el sábado?", ["Ja, ich habe Zeit!", "Am Samstag kann ich."]),
+                ("Super! Um wie viel Uhr treffen wir uns?", "¡Estupendo! ¿A qué hora nos encontramos?", ["Um zehn Uhr?", "Um drei Uhr nachmittags."]),
+                ("Das passt mir gut! Wo treffen wir uns?", "¡Me viene muy bien! ¿Dónde nos encontramos?", ["Im Park?", "Am Bahnhof."]),
+                ("Perfekt! Dann bis Samstag. Tschüss!", "¡Perfecto! Entonces hasta el sábado. ¡Chao!", ["Bis Samstag!", "Tschüss Anna!"]),
             ],
             "Herr Weber": [
-                ("Guten Tag! Wie kann ich Ihnen helfen?", "¡Buenas tardes! ¿Cómo le puedo ayudar?"),
-                ("Der Bahnhof ist geradeaus und dann links.", "La estación está derecho y luego a la izquierda."),
-                ("Der Zug fährt auf Gleis drei ab.", "El tren sale del andén tres."),
-                ("Gute Reise und auf Wiedersehen!", "¡Buen viaje y hasta luego!"),
+                ("Guten Tag! Wie kann ich Ihnen helfen?", "¡Buenas tardes! ¿Cómo le puedo ayudar?", ["Wo ist der Bahnhof?", "Entschuldigung, wo ist der Zug?"]),
+                ("Der Bahnhof ist geradeaus und dann links.", "La estación está derecho y luego a la izquierda.", ["Vielen Dank!", "Danke schön!"]),
+                ("Der Zug fährt auf Gleis drei ab.", "El tren sale del andén tres.", ["Danke für die Hilfe!", "Auf Gleis drei, danke!"]),
+                ("Gute Reise und auf Wiedersehen!", "¡Buen viaje y hasta luego!", ["Auf Wiedersehen!", "Danke!"]),
             ],
             "Frau Wagner": [
-                ("Guten Tag! Was fehlt Ihnen denn?", "¡Buenas tardes! ¿Qué le ocurre?"),
-                ("Haben Sie auch Fieber?", "¿Tiene también fiebre?"),
-                ("Hier sind Tabletten gegen die Schmerzen. Nehmen Sie eine mit Wasser.", "Aquí tiene pastillas para el dolor. Tome una con agua."),
-                ("Gute Besserung und auf Wiedersehen!", "¡Que se mejore y hasta luego!"),
+                ("Guten Tag! Was fehlt Ihnen denn?", "¡Buenas tardes! ¿Qué le ocurre?", ["Ich habe Kopfschmerzen.", "Mein Bauch tut weh."]),
+                ("Haben Sie auch Fieber?", "¿Tiene también fiebre?", ["Nein, kein Fieber.", "Ja, ein bisschen Fieber."]),
+                ("Hier sind Tabletten gegen die Schmerzen. Nehmen Sie eine mit Wasser.", "Aquí tiene pastillas para el dolor. Tome una con agua.", ["Vielen Dank Frau Wagner.", "Wie oft am Tag?"]),
+                ("Gute Besserung und auf Wiedersehen!", "¡Que se mejore y hasta luego!", ["Danke sehr, auf Wiedersehen!", "Tschüss!"]),
             ],
         }
 
         scenario_flows_en = {
             "Ms. Miller": [
-                ("Good morning! Welcome to the class. What is your name?", "¡Buenos días! Bienvenido a la clase. ¿Cuál es tu nombre?"),
-                ("Nice to meet you! Where are you from?", "¡Gusto en conocerte! ¿De dónde eres?"),
-                ("Great! Can you spell your name please?", "¡Genial! ¿Puedes deletrear tu nombre por favor?"),
-                ("Thank you! Please take a seat.", "¡Gracias! Por favor toma asiento."),
+                ("Good morning! Welcome to the class. What is your name?", "¡Buenos días! Bienvenido a la clase. ¿Cuál es tu nombre?", ["My name is...", "I am..."]),
+                ("Nice to meet you! Where are you from?", "¡Gusto en conocerte! ¿De dónde eres?", ["I am from Spain.", "I am from Mexico, and you?"]),
+                ("Great! Can you spell your name please?", "¡Genial! ¿Puedes deletrear tu nombre por favor?", ["Yes, of course.", "Sure!"]),
+                ("Thank you! Please take a seat.", "¡Gracias! Por favor toma asiento.", ["Thank you!", "Thanks a lot!"]),
             ],
             "Tom": [
-                ("Hello! What can I get for you today?", "¡Hola! ¿Qué te puedo servir hoy?"),
-                ("Sure thing! Would you like coffee or tea?", "¡Claro que sí! ¿Te gustaría café o té?"),
-                ("That is four pounds please. Cash or card?", "Son cuatro libras por favor. ¿Efectivo o tarjeta?"),
-                ("Thank you! Have a great day!", "¡Gracias! ¡Que tengas un gran día!"),
+                ("Hello! What can I get for you today?", "¡Hola! ¿Qué te puedo servir hoy?", ["A coffee, please.", "Can I have a tea?"]),
+                ("Sure thing! Would you like coffee or tea?", "¡Claro que sí! ¿Te gustaría café o té?", ["Coffee, please.", "Tea with milk, please."]),
+                ("That is four pounds please. Cash or card?", "Son cuatro libras por favor. ¿Efectivo o tarjeta?", ["Cash, please.", "By card, please."]),
+                ("Thank you! Have a great day!", "¡Gracias! ¡Que tengas un gran día!", ["Thank you, you too!", "Bye!"]),
             ],
             "Oliver": [
-                ("Hi! What is your name?", "¡Hola! ¿Cuál es tu nombre?"),
-                ("Nice to meet you! Where are you from?", "¡Gusto en conocerte! ¿De dónde eres?"),
-                ("Cool! Do you have any brothers or sisters?", "¡Genial! ¿Tienes hermanos o hermanas?"),
-                ("Awesome! Great to meet you!", "¡Estupendo! ¡Gusto en conocerte!"),
+                ("Hi! What is your name?", "¡Hola! ¿Cuál es tu nombre?", ["Hi! I am...", "My name is..."]),
+                ("Nice to meet you! Where are you from?", "¡Gusto en conocerte! ¿De dónde eres?", ["I am from Colombia.", "I am from Spain."]),
+                ("Cool! Do you have any brothers or sisters?", "¡Genial! ¿Tienes hermanos o hermanas?", ["Yes, one brother.", "No, I am an only child."]),
+                ("Awesome! Great to meet you!", "¡Estupendo! ¡Gusto en conocerte!", ["Nice to meet you too!", "See you!"]),
             ],
             "Sarah": [
-                ("Hey! Are you free this weekend?", "¡Hola! ¿Estás libre este fin de semana?"),
-                ("Great! What time should we meet?", "¡Genial! ¿A qué hora nos encontramos?"),
-                ("That works for me! Where do you want to go?", "¡Me sirve! ¿A dónde quieres ir?"),
-                ("Perfect! See you then!", "¡Perfecto! ¡Nos vemos entonces!"),
+                ("Hey! Are you free this weekend?", "¡Hola! ¿Estás libre este fin de semana?", ["Yes, I am free!", "Sure, what is up?"]),
+                ("Great! What time should we meet?", "¡Genial! ¿A qué hora nos encontramos?", ["At two o'clock?", "Around five?"]),
+                ("That works for me! Where do you want to go?", "¡Me sirve! ¿A dónde quieres ir?", ["To the park?", "To the cafe."]),
+                ("Perfect! See you then!", "¡Perfecto! ¡Nos vemos entonces!", ["See you then!", "Bye Sarah!"]),
             ],
             "Officer Davis": [
-                ("Hello! Can I help you with directions?", "¡Hola! ¿Puedo ayudarte con direcciones?"),
-                ("The station is straight ahead and then on your left.", "La estación está todo derecho y luego a tu izquierda."),
-                ("The bus stop is just across the street.", "La parada de autobús está cruzando la calle."),
-                ("You are very welcome. Have a safe trip!", "De nada. ¡Que tengas un buen viaje!"),
+                ("Hello! Can I help you with directions?", "¡Hola! ¿Puedo ayudarte con direcciones?", ["Excuse me, where is the train station?", "Where is the bus stop?"]),
+                ("The station is straight ahead and then on your left.", "La estación está todo derecho y luego a tu izquierda.", ["Thank you very much!", "Thanks!"]),
+                ("The bus stop is just across the street.", "La parada de autobús está cruzando la calle.", ["Got it, thank you!", "Thanks for your help!"]),
+                ("You are very welcome. Have a safe trip!", "De nada. ¡Que tengas un buen viaje!", ["Thank you, goodbye!", "Bye!"]),
             ],
             "Dr. Jenkins": [
-                ("Hello! What is the problem today?", "¡Hola! ¿Cuál es el problema hoy?"),
-                ("Do you also have a fever?", "¿Tienes también fiebre?"),
-                ("Here is some medicine for the pain. Take one with water.", "Aquí tienes medicina para el dolor. Toma una con agua."),
-                ("Get well soon and take care!", "¡Que te mejores pronto y cuídate!"),
+                ("Hello! What is the problem today?", "¡Hola! ¿Cuál es el problema hoy?", ["I have a headache.", "I have a sore throat."]),
+                ("Do you also have a fever?", "¿Tienes también fiebre?", ["No, no fever.", "Yes, a little bit."]),
+                ("Here is some medicine for the pain. Take one with water.", "Aquí tienes medicina para el dolor. Toma una con agua.", ["Thank you doctor.", "How many times a day?"]),
+                ("Get well soon and take care!", "¡Que te mejores pronto y cuídate!", ["Thank you, take care!", "Goodbye!"]),
             ],
         }
 
@@ -517,60 +517,62 @@ class GeminiCoachService:
 
         if not self.is_available() or settings.is_mock_mode:
             idx = min(user_turn_count - 1 if user_turn_count > 0 else 0, len(char_flow) - 1)
-            rep_native, rep_es = char_flow[idx]
+            step = char_flow[idx]
+            rep_native = step[0]
+            rep_es = step[1]
+            sugg_replies = step[2] if len(step) > 2 else list(target_phrases[:2])
             is_goal_met = user_turn_count >= len(char_flow)
             return {
                 "reply_native": rep_native,
                 "reply_es": rep_es,
                 "mission_status": "goal_achieved" if is_goal_met else "in_progress",
-                "feedback_tip": "¡Vas muy bien! Responde de forma sencilla usando frases cortas."
-                if user_turn_count == 1
-                else None,
+                "feedback_tip": None,
+                "suggested_replies": sugg_replies,
             }
 
         prompt = (
-            f"Actúas como un profesor y compañero de roleplay interactivo de {lang_name} para un alumno hispanohablante principiante (nivel CEFR A1 inicial).\n"
+            f"Actúas como {character_name} ({character_role}) en una conversación interactiva de la vida real con un alumno hispanohablante aprendiendo {lang_name} (nivel CEFR A1/A2).\n"
             f"Escenario: {scenario_title}\n"
-            f"Tu personaje: {character_name} ({character_role})\n"
             f"Misión del alumno: {mission_brief}\n"
             f"Frases clave esperadas: {', '.join(target_phrases)}\n\n"
             f"Historial del diálogo previo:\n{history_text}\n"
             f"- Alumno (último mensaje que acaba de enviar): {user_message}\n\n"
-            f"REGLAS OBLIGATORIAS (MÁXIMA PRIORIDAD):\n"
-            f"1. ADAPTACIÓN RADICAL A NIVEL A1 (SUPERVIVENCIA INICIAL):\n"
-            f"   - Tu respuesta DEBE ser ULTRA SENCILLA: máximo 1 o 2 oraciones breves (menos de 10 palabras en total).\n"
-            f"   - Usa solo vocabulario básico, transparente y cotidiano. PROHIBIDO usar gramática avanzada, oraciones subordinadas largas, verbos complejos o palabras rebuscadas.\n"
-            f"2. COHERENCIA TOTAL CON LO QUE DIJO EL ALUMNO (NUNCA PIERDAS EL HILO):\n"
-            f"   - Escucha y responde DIRECTAMENTE al último mensaje del alumno ('{user_message}').\n"
-            f"   - Si el alumno dijo algo corto como 'Ja', 'Nein', 'Danke' o 'Spanien', tómalo en cuenta de inmediato (ej: si dijo 'Nein', di: 'Kein Problem! Und was möchten Sie?'; si dijo su país o nombre, reacciona a ese dato).\n"
-            f"   - NUNCA cambies de tema bruscamente ni digas frases contradictorias.\n"
-            f"3. GUÍA AMABLE:\n"
-            f"   - Si la misión sigue en curso ('in_progress'), termina con UNA sola pregunta o instrucción muy simple y directa para que el alumno sepa qué responder.\n"
-            f"   - NUNCA te despidas prematuramente si apenas están empezando la interacción.\n"
-            f"4. CONDICIÓN DE CUMPLIMIENTO ('mission_status'):\n"
+            f"PEDAGOGÍA MODERNA Y FILOSOFÍA DE CONVERSACIÓN (MÁXIMA PRIORIDAD):\n"
+            f"1. PERSONALIDAD CÁLIDA Y AMIGABLE (LANGUAGE BUDDY):\n"
+            f"   - Sé una persona real, empática, amable y atenta. Muestra entusiasmo o curiosidad natural según la situación (usa interjecciones cotidianas como 'Ach so!', 'Wie schön!', 'Toll!', 'Oh great!', 'Awesome!').\n"
+            f"   - Conecta directamente con lo que el alumno acaba de decir ('{user_message}'): si compartió su nombre o país, reacciona a ese dato; si dijo 'Ja' o 'Nein', adapta tu réplica.\n"
+            f"2. RECASTING IMPLÍCITO (NUNCA REGAÑES NI CORRIJAS DE FORMA FRÍA):\n"
+            f"   - Si el alumno cometió un error gramatical o léxico leve, NUNCA digas 'eso está mal'. En su lugar, modela la forma correcta dentro de tu propia respuesta de forma 100% natural mientras la charla continúa con fluidez.\n"
+            f"3. LONGITUD Y FLUIDEZ NATURAL A1/A2:\n"
+            f"   - Responde con 1 a 3 oraciones naturales (alrededor de 10 a 25 palabras). Evita frases telegráficas o frías, manteniendo siempre un lenguaje accesible para nivel A1/A2.\n"
+            f"   - Si la misión sigue en curso ('in_progress'), concluye con una pregunta o comentario sencillo para invitar al alumno a contestar.\n"
+            f"4. ANDAMIAJE ACTIVO (SUGGESTED REPLIES):\n"
+            f"   - Proporciona EXACTAMENTE 2 o 3 opciones cortas ('suggested_replies') que el alumno podría usar para responderte ahora mismo si se siente bloqueado o tímido.\n"
+            f"5. CONSEJO CARIÑOSO OPCIONAL ('feedback_tip'):\n"
+            f"   - Si el alumno tuvo un error notable que valga la pena comentar, añade un tip ultra breve, positivo y cariñoso en español (máx 15 palabras, ej: '✨ Tip: Recuerda que decimos \"Ich möchte...\" para pedir con cortesía').\n"
+            f"   - Si el alumno se comunicó bien o el error fue menor, pon null.\n"
+            f"6. CONDICIÓN DE CUMPLIMIENTO ('mission_status'):\n"
             f"   - 'in_progress': si faltan pasos de la misión ({mission_brief}) o llevan menos de 3 intercambios.\n"
-            f"   - 'goal_achieved': solo cuando el alumno haya cumplido la misión con éxito y sea el momento natural de cerrar la conversación.\n"
-            f"5. CONSEJO EN ESPAÑOL ('feedback_tip'):\n"
-            f"   - Si el alumno cometió un error o dudó, pon un tip cortito y cariñoso en español (máx 15 palabras). Si lo hizo bien, pon null.\n\n"
-            f"Responde ESTRICTAMENTE en JSON válido sin formato markdown adicional:\n"
+            f"   - 'goal_achieved': solo cuando el alumno haya cumplido la misión con éxito y sea el momento natural de despedirse o cerrar la conversación.\n\n"
+            f"Responde ESTRICTAMENTE con un objeto JSON válido sin texto extra:\n"
             f'{{\n'
             f'  "reply_native": "texto en {lang_name} de {character_name}",\n'
-            f'  "reply_es": "traducción clara al español",\n'
+            f'  "reply_es": "traducción clara y amigable al español",\n'
             f'  "mission_status": "in_progress" | "goal_achieved",\n'
-            f'  "feedback_tip": "consejo breve en español o null"\n'
+            f'  "feedback_tip": "consejo breve en español o null",\n'
+            f'  "suggested_replies": ["Opción 1 sencilla", "Opción 2 alternativa"]\n'
             f'}}'
         )
 
         try:
             if HAS_NEW_GENAI and self.client:
-                # Usar configuración con temperatura baja para máxima fidelidad y coherencia
                 config = None
                 try:
                     from google.genai import types
 
                     config = types.GenerateContentConfig(
-                        max_output_tokens=150,
-                        temperature=0.2,
+                        max_output_tokens=300,
+                        temperature=0.4,
                     )
                 except Exception:
                     pass
@@ -592,11 +594,22 @@ class GeminiCoachService:
                             elif "```" in text_raw:
                                 text_raw = text_raw.split("```")[1].split("```")[0].strip()
                             data = json.loads(text_raw)
+                            idx_fallback = min(
+                                user_turn_count - 1 if user_turn_count > 0 else 0,
+                                len(char_flow) - 1,
+                            )
+                            step_fallback = char_flow[idx_fallback]
+                            default_sugg = (
+                                step_fallback[2]
+                                if len(step_fallback) > 2
+                                else list(target_phrases[:2])
+                            )
                             return {
                                 "reply_native": data.get("reply_native", char_flow[0][0]),
                                 "reply_es": data.get("reply_es", char_flow[0][1]),
                                 "mission_status": data.get("mission_status", "in_progress"),
                                 "feedback_tip": data.get("feedback_tip"),
+                                "suggested_replies": data.get("suggested_replies") or default_sugg,
                             }
                     except Exception as exc:
                         logger.warning(f"Error procesando conversación con {candidate_model}: {exc}")
@@ -606,12 +619,16 @@ class GeminiCoachService:
 
         # Fallback contextual según el personaje si Gemini falló
         idx = min(user_turn_count - 1 if user_turn_count > 0 else 0, len(char_flow) - 1)
-        fallback_native, fallback_es = char_flow[idx]
+        fallback_step = char_flow[idx]
+        fallback_native = fallback_step[0]
+        fallback_es = fallback_step[1]
+        fallback_sugg = fallback_step[2] if len(fallback_step) > 2 else list(target_phrases[:2])
         return {
             "reply_native": fallback_native,
             "reply_es": fallback_es,
             "mission_status": "in_progress",
             "feedback_tip": None,
+            "suggested_replies": fallback_sugg,
         }
 
     def generate_conversation_debrief(

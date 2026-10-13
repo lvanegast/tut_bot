@@ -1050,6 +1050,7 @@ class ProgressTracker:
         initial_greeting: str,
         initial_greeting_es: str,
         unit_id: str = "unit_1",
+        suggested_replies: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Inicia una nueva sesión conversacional de roleplay activo."""
         self.get_user_state(user_id)
@@ -1061,6 +1062,7 @@ class ProgressTracker:
                 "text": initial_greeting,
                 "text_es": initial_greeting_es,
                 "timestamp": now,
+                "suggested_replies": suggested_replies or [],
             }
         ]
         with self._get_connection() as conn:
@@ -1136,6 +1138,7 @@ class ProgressTracker:
         text: str,
         text_es: Optional[str] = None,
         name: Optional[str] = None,
+        suggested_replies: Optional[List[str]] = None,
     ):
         """Agrega un turno (del alumno o del personaje) al diálogo activo."""
         active = self.get_active_conversation(user_id)
@@ -1149,6 +1152,7 @@ class ProgressTracker:
             "text": text,
             "text_es": text_es,
             "timestamp": now,
+            "suggested_replies": suggested_replies or [],
         }
         turns.append(turn_data)
         with self._get_connection() as conn:
