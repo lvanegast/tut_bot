@@ -85,9 +85,25 @@ class TTSRequest(BaseModel):
     voice: Optional[str] = None
 
 
+class SystemMetrics(BaseModel):
+    cpu_temp_c: Optional[float] = None
+    power_mode: Optional[str] = None
+    ram_total_mb: Optional[int] = None
+    ram_used_mb: Optional[int] = None
+    ram_available_mb: Optional[int] = None
+    ram_used_pct: Optional[float] = None
+    swap_total_mb: Optional[int] = None
+    swap_used_mb: Optional[int] = None
+    swap_used_pct: Optional[float] = None
+    disk_free_gb: Optional[float] = None
+    disk_total_gb: Optional[float] = None
+
+
 class HealthStatus(BaseModel):
     status: str
     azure_configured: bool
     gemini_configured: bool
     telegram_configured: bool
     mock_mode: bool
+    system_metrics: Optional[SystemMetrics] = None
+

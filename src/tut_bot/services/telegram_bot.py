@@ -36,6 +36,7 @@ from tut_bot.services.curriculum import (
 from tut_bot.services.exercises import get_exercises
 from tut_bot.services.final_exam import get_level_exam
 from tut_bot.services.gemini_coach import gemini_coach
+from tut_bot.services.system_monitor import format_system_status, get_system_metrics
 from tut_bot.services.tracker import tracker
 
 logger = logging.getLogger(__name__)
@@ -285,7 +286,11 @@ class TelegramCoachBot:
         )
         app.add_handler(CommandHandler(["libre", "custom", "fraselibre"], self.cmd_custom_phrase))
         app.add_handler(CommandHandler(["stats", "estadisticas", "progreso"], self.cmd_stats))
+        app.add_handler(
+            CommandHandler(["status", "estado", "salud", "system"], self.cmd_status)
+        )
         app.add_handler(CommandHandler(["web", "panel", "link", "dashboard"], self.cmd_web))
+
         app.add_handler(
             CommandHandler(["reset", "reiniciar", "borrarprogreso"], self.cmd_reset)
         )
@@ -413,8 +418,10 @@ class TelegramCoachBot:
             "• <b>/idioma</b> — Alterna entre Alemán (de-DE) e Inglés (en-US).\n"
             "• <b>/libre &lt;frase&gt;</b> — Configura cualquier frase que desees pronunciar.\n"
             "• <b>/stats</b> — Muestra tu puntuación promedio y fonemas a mejorar.\n"
+            "• <b>/status</b> — Telemetría de hardware (temperatura de la Jetson Nano, RAM y servicios).\n"
             "• <b>/web</b> — Enlace al panel web en tu PC."
         )
+
         await self._safe_reply_text(update.effective_message, help_text)
 
     async def cmd_mode(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1713,6 +1720,28 @@ class TelegramCoachBot:
         )
         await self._safe_reply_text(update.effective_message, text)
 
+    async def cmd_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Muestra el estado operativo de los servicios y telemetría de hardware de la Jetson Nano."""
+        metrics = get_system_metrics()
+        msg = format_system_status(
+            azure_ok=self.azure_service.is_available(),
+            gemini_ok=self.gemini_coach.is_available(),
+            telegram_ok=True,
+            mock_mode=settings.is_mock_mode,
+            metrics=metrics,
+        )
+        keyboard = [
+            [
+                InlineKeyboardButton("🔄 Actualizar", callback_data="btn_sys_status"),
+                InlineKeyboardButton("🏠 Menú Principal", callback_data="btn_start_menu"),
+            ]
+        ]
+        await self._safe_reply_text(
+            update.effective_message,
+            msg,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
         await query.answer()
@@ -1731,6 +1760,28 @@ class TelegramCoachBot:
 
         elif data == "btn_stats":
             await self._send_stats(update, user_id, edit_message=True)
+
+        elif data == "btn_sys_status":
+            metrics = get_system_metrics()
+            msg = format_system_status(
+                azure_ok=self.azure_service.is_available(),
+                gemini_ok=self.gemini_coach.is_available(),
+                telegram_ok=True,
+                mock_mode=settings.is_mock_mode,
+                metrics=metrics,
+            )
+            keyboard = [
+                [
+                    InlineKeyboardButton("🔄 Actualizar", callback_data="btn_sys_status"),
+                    InlineKeyboardButton("🏠 Menú Principal", callback_data="btn_start_menu"),
+                ]
+            ]
+            await self._safe_edit_text(
+                query,
+                msg,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+            )
+
 
         elif data == "btn_lang_menu":
             keyboard = [

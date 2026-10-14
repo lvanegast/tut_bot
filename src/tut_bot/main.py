@@ -16,6 +16,7 @@ from tut_bot.models.schemas import EvaluationResponse, HealthStatus, TTSRequest
 from tut_bot.services.azure_speech import azure_service
 from tut_bot.services.exercises import get_categories, get_exercises
 from tut_bot.services.gemini_coach import gemini_coach
+from tut_bot.services.system_monitor import get_system_metrics
 from tut_bot.services.telegram_bot import telegram_bot
 from tut_bot.services.tracker import tracker
 
@@ -102,13 +103,16 @@ app.add_middleware(
 
 @app.get("/api/health", response_model=HealthStatus)
 def health_check():
+    metrics = get_system_metrics()
     return HealthStatus(
         status="running",
         azure_configured=azure_service.is_available(),
         gemini_configured=gemini_coach.is_available(),
         telegram_configured=telegram_bot.is_configured(),
         mock_mode=settings.is_mock_mode,
+        system_metrics=metrics,
     )
+
 
 
 @app.get("/api/exercises")

@@ -35,6 +35,28 @@ def test_health_endpoint():
     assert "azure_configured" in data
     assert "gemini_configured" in data
     assert "mock_mode" in data
+    assert "system_metrics" in data
+    assert isinstance(data["system_metrics"], dict)
+
+
+def test_system_monitor():
+    from tut_bot.services.system_monitor import format_system_status, get_system_metrics
+
+    metrics = get_system_metrics()
+    assert isinstance(metrics, dict)
+    assert "disk_free_gb" in metrics
+
+    formatted = format_system_status(
+        azure_ok=True,
+        gemini_ok=True,
+        telegram_ok=True,
+        mock_mode=False,
+        metrics=metrics,
+    )
+    assert "tut_bot" in formatted
+    assert "Azure Speech SDK" in formatted
+    assert "Google Gemini" in formatted
+
 
 
 def test_exercises_endpoints():
