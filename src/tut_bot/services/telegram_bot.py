@@ -712,10 +712,11 @@ class TelegramCoachBot:
         lang_name = "🇩🇪 Alemán" if lang.startswith("de") else "🇺🇸 Inglés"
         exam_name = "Goethe Start Deutsch 1" if lang.startswith("de") else "Cambridge A1 Key"
 
+        lvl_lex = info.get("level_lexicon") or tracker.get_user_lexicon_progress(user_id, lang, level)
         lines = [
-            f"🎓 <b>¡HAS COMPLETADO LOS 6 TEMAS DE NIVEL {level}!</b> 🎓\n",
-            f"Has cubierto con éxito todas las 6 Unidades Temáticas oficiales de <b>{level}</b> ({lang_name}).",
-            "<i>Inventario cubierto: ~650 palabras de alta frecuencia.</i>\n",
+            f"🎓 <b>¡HAS RECORRIDO LAS 6 UNIDADES DE NIVEL {level}!</b> 🎓\n",
+            f"Has practicado las 6 Unidades Temáticas oficiales de <b>{level}</b> ({lang_name}).",
+            f"📖 <b>Vocabulario oficial dominado:</b> <code>{lvl_lex['mastered_count']} / {lvl_lex['total_target']}</code> palabras ({lvl_lex['percentage']:.1f}%).\n",
             "🛡️ <b>Requisito de Certificación de Nivel:</b>",
             f"Para certificar tus conocimientos y desbloquear formalmente el <b>Nivel {next_level}</b>, debes aprobar la <b>Evaluación Final Oficial {level}</b> ({exam_name}).\n",
             "📋 <b>Estructura de la Evaluación:</b>",
@@ -946,11 +947,16 @@ class TelegramCoachBot:
 
         bar = _make_progress_bar((units_done / total_units) * 100.0)
 
+        u_lex = info.get("unit_lexicon") or tracker.get_unit_lexicon_progress(user_id, lang, level, completed_unit)
+        lvl_lex = info.get("level_lexicon") or tracker.get_user_lexicon_progress(user_id, lang, level)
+
         lines = [
-            "🎉 <b>¡UNIDAD TEMÁTICA COMPLETADA!</b> 🎉\n",
-            f"Has completado con éxito la unidad: <b>{u_title}</b>.",
-            f"📊 <b>Progreso de Unidades en Nivel {level}:</b>\n",
-            f"• <code>[{bar}]</code> <b>{units_done} / {total_units}</b> unidades aprobadas ({int((units_done / total_units) * 100)}%)\n",
+            "🎉 <b>¡SERIE DE EJERCICIOS COMPLETADA!</b> 🎉\n",
+            f"Has completado la ronda de práctica de: <b>{u_title}</b>.",
+            f"📖 <b>Vocabulario aprendido en esta unidad:</b> <code>{u_lex['mastered_count']} / {u_lex['total_target']}</code> palabras ({u_lex['percentage']:.0f}%)\n",
+            f"📊 <b>Progreso léxico en Nivel {level}:</b> <code>{lvl_lex['mastered_count']} / {lvl_lex['total_target']}</code> palabras ({lvl_lex['percentage']:.1f}%)\n",
+            f"🗺️ <b>Progreso de Unidades en Nivel {level}:</b>\n",
+            f"• <code>[{bar}]</code> <b>{units_done} / {total_units}</b> unidades recorridas ({int((units_done / total_units) * 100)}%)\n",
         ]
 
         keyboard = []
@@ -1450,18 +1456,10 @@ class TelegramCoachBot:
             tracker.set_user_exercise_index(user_id, 0)
             idx = 0
 
-        # Si el usuario ya completó el nivel o las 6 unidades según la FSM, mostrar tarjeta de graduación
-        if fsm_state == "LEVEL_COMPLETED" or fsm_state == "READY_FOR_FINAL_EXAM":
-            advance_info = {
-                "language": lang,
-                "level": level,
-                "skill_mode": skill_mode,
-                "next_level": "A2" if level == "A1" else ("B1" if level == "A2" else None),
-            }
-            await self._send_level_completed_card(
-                update, user_id, advance_info, edit_message=edit_message
-            )
-            return
+        # Si el usuario estaba en estado de examen o completado pero solicita ver ejercicios, permitirle continuar practicando
+        if fsm_state in ("LEVEL_COMPLETED", "READY_FOR_FINAL_EXAM"):
+            tracker.set_fsm_state(user_id, "IN_EXERCISE")
+            fsm_state = "IN_EXERCISE"
 
         ex = exercises[idx]
 
@@ -1470,10 +1468,12 @@ class TelegramCoachBot:
         lang_header = "🇩🇪 ALEMÁN" if lang.startswith("de") else "🇺🇸 INGLÉS"
         u_info = get_unit_by_id(ex.unit_id or "unit_1", lang, level)
         u_badge = f" · {u_info.icon} U{u_info.number}" if u_info else ""
+        u_lex = tracker.get_unit_lexicon_progress(user_id, lang, level, ex.unit_id or "unit_1")
+        u_vocab_badge = f" · 📖 Vocab: {u_lex['mastered_count']}/{u_lex['total_target']}" if u_lex['total_target'] > 0 else ""
 
         if skill_mode == "writing":
             card_lines = [
-                f"✍️ <b>{lang_header} — [{ex.level}{u_badge}] {ex.category}</b>",
+                f"✍️ <b>{lang_header} — [{ex.level}{u_badge}{u_vocab_badge}] {ex.category}</b>",
                 f"<b>Tema:</b> {ex.title}\n",
                 "📝 <b>Consigna de Escritura:</b>",
                 f"👉 <b>{ex.prompt or 'Traduce al alemán:'}</b>\n",
@@ -1505,7 +1505,7 @@ class TelegramCoachBot:
 
         elif skill_mode == "listening":
             card_lines = [
-                f"👂 <b>{lang_header} — [{ex.level}{u_badge}] {ex.category}</b>",
+                f"👂 <b>{lang_header} — [{ex.level}{u_badge}{u_vocab_badge}] {ex.category}</b>",
                 f"<b>Tema:</b> {ex.title}\n",
                 "🎧 <b>Pregunta de Comprensión:</b>",
                 f"👉 <b>{ex.prompt or 'Escucha el audio nativo y responde:'}</b>\n",
@@ -1569,11 +1569,19 @@ class TelegramCoachBot:
             # Modo SPEAKING (Hablar)
             phonemes_str = " · ".join([f"<code>/{p}/</code>" for p in ex.focus_phonemes])
             card_lines = [
-                f"🗣️ <b>{lang_header} — [{ex.level}{u_badge}] {ex.category}</b>",
+                f"🗣️ <b>{lang_header} — [{ex.level}{u_badge}{u_vocab_badge}] {ex.category}</b>",
                 f"<b>Tema:</b> {ex.title}\n",
-                "🗣️ <b>Frase a pronunciar:</b>",
-                f'👉 <b>"{ex.target_text}"</b>\n',
             ]
+            if ex.prompt:
+                card_lines.append(f"🎯 <b>Consigna:</b> <i>{ex.prompt}</i>\n")
+            card_lines.extend(
+                [
+                    "🗣️ <b>Frase a pronunciar:</b>",
+                    f'👉 <b>"{ex.target_text}"</b>\n',
+                ]
+            )
+            if ex.grammar_note:
+                card_lines.append(f"💡 <b>Pista Gramatical:</b> <i>{ex.grammar_note}</i>\n")
             if ex.phonetic_guide:
                 card_lines.append(f'🗣️ <b>Pronunciación fácil:</b> <i>"{ex.phonetic_guide}"</i>')
             if ex.ipa:

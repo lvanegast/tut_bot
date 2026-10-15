@@ -495,8 +495,14 @@ class ProgressTracker:
             if unit_to_mark == "all":
                 unit_to_mark = "unit_1"
 
+            # Reiniciar índice a 0 para permitir repasar o continuar sin quedar bloqueado
+            self.set_user_exercise_index(user_id, 0)
+
             completed_units = self.mark_unit_completed(user_id, lang, level, unit_to_mark)
             total_units = 6  # 6 Unidades Temáticas oficiales por nivel
+
+            unit_lexicon = self.get_unit_lexicon_progress(user_id, lang, level, unit_to_mark)
+            level_lexicon = self.get_user_lexicon_progress(user_id, lang, level)
 
             unit_num = 1
             if unit_to_mark.startswith("unit_"):
@@ -523,6 +529,8 @@ class ProgressTracker:
                     "total_completed": total_exercises,
                     "units_completed": len(completed_units),
                     "total_units": total_units,
+                    "unit_lexicon": unit_lexicon,
+                    "level_lexicon": level_lexicon,
                 }
             else:
                 self.set_fsm_state(user_id, "UNIT_COMPLETED")
@@ -535,6 +543,8 @@ class ProgressTracker:
                     "next_unit": next_unit_id,
                     "units_completed_count": len(completed_units),
                     "total_units": total_units,
+                    "unit_lexicon": unit_lexicon,
+                    "level_lexicon": level_lexicon,
                 }
 
     def mark_level_passed(self, user_id: str, language: str, level: str, skill_mode: str):
@@ -935,6 +945,36 @@ class ProgressTracker:
             "total_target": total_target,
             "percentage": percent,
             "mastered_words": mastered,
+        }
+
+    def get_unit_lexicon_progress(
+        self, user_id: str, language: str, level: str, unit_id: str
+    ) -> Dict[str, Any]:
+        """Calcula el progreso del usuario hacia las palabras meta de una unidad temática específica."""
+        from tut_bot.services.curriculum import get_unit_by_id
+
+        u_obj = get_unit_by_id(unit_id, language, level)
+        if not u_obj or not u_obj.target_words:
+            return {
+                "mastered_count": 0,
+                "total_target": 0,
+                "percentage": 0.0,
+                "mastered_words": [],
+            }
+
+        target_set = {w.lower() for w in u_obj.target_words}
+        all_mastered = set(self.get_user_mastered_words(user_id, language, level))
+        unit_mastered = sorted(list(target_set.intersection(all_mastered)))
+        total_target = len(target_set)
+        count = len(unit_mastered)
+        percent = min(100.0, (count / total_target) * 100.0) if total_target > 0 else 0.0
+        return {
+            "unit_id": unit_id,
+            "unit_title": u_obj.title_es,
+            "mastered_count": count,
+            "total_target": total_target,
+            "percentage": percent,
+            "mastered_words": unit_mastered,
         }
 
     def record_evaluation(

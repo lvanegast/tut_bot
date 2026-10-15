@@ -357,13 +357,75 @@ def extract_words_from_text(text: str) -> List[str]:
     return result
 
 
+GERMAN_A1_INFLECTIONS = {
+    # sein
+    "bin": "sein", "bist": "sein", "ist": "sein", "sind": "sein", "seid": "sein", "war": "sein",
+    # haben
+    "habe": "haben", "hast": "haben", "hat": "haben", "haben": "haben", "habt": "haben", "hatte": "haben",
+    # heißen
+    "heiße": "heißen", "heißt": "heißen",
+    # kommen
+    "komme": "kommen", "kommst": "kommen", "kommt": "kommen",
+    # wohnen
+    "wohne": "wohnen", "wohnst": "wohnen", "wohnt": "wohnen",
+    # sprechen
+    "spreche": "sprechen", "sprichst": "sprechen", "spricht": "sprechen", "sprecht": "sprechen",
+    # lernen
+    "lerne": "lernen", "lernst": "lernen", "lernt": "lernen",
+    # verstehen
+    "verstehe": "verstehen", "verstehst": "verstehen", "versteht": "verstehen",
+    # buchstabieren
+    "buchstabiere": "buchstabieren", "buchstabierst": "buchstabieren", "buchstabiert": "buchstabieren",
+    # essen
+    "esse": "essen", "isst": "essen", "esst": "essen",
+    # trinken
+    "trinke": "trinken", "trinkst": "trinken", "trinkt": "trinken",
+    # kaufen
+    "kaufe": "kaufen", "kaufst": "kaufen", "kauft": "kaufen",
+    # verkaufen
+    "verkaufe": "verkaufen", "verkaufst": "verkaufen", "verkauft": "verkaufen",
+    # bezahlen
+    "bezahle": "bezahlen", "bezahlst": "bezahlen", "bezahlt": "bezahlen",
+    # bestellen
+    "bestelle": "bestellen", "bestellst": "bestellen", "bestellt": "bestellen",
+    # kosten
+    "kostet": "kosten",
+    # schmecken
+    "schmeckt": "schmecken",
+    # möchten
+    "möchte": "möchten", "möchtest": "möchten", "möchtet": "möchten",
+    # nehmen
+    "nehme": "nehmen", "nimmst": "nehmen", "nimmt": "nehmen", "nehmt": "nehmen",
+    # brauchen
+    "brauche": "brauchen", "brauchst": "brauchen", "braucht": "brauchen",
+    # kochen
+    "koche": "kochen", "kochst": "kochen", "kocht": "kochen",
+    # Plurales y variantes frecuentes
+    "äpfel": "apfel", "brötchen": "brötchen", "bücher": "buch", "kinder": "kind", "eltern": "eltern",
+    "leute": "leute", "städte": "stadt", "länder": "land", "wörter": "wort", "sätze": "satz",
+    "fragen": "frage", "antworten": "antwort", "tage": "tag", "nächte": "nacht", "jahre": "jahr",
+    "monate": "monat", "stunden": "stunde", "minuten": "minute", "euro": "euro", "cent": "cent",
+    "kollegen": "kollege", "flaschen": "flasche", "gläser": "glas", "tassen": "tasse", "dosen": "dose",
+    "packungen": "packung", "stücke": "stück", "salate": "salat", "suppen": "suppe", "kuchen": "kuchen",
+}
+
+
 def match_known_words(candidate_words: List[str], language: str, level: str = "A1") -> List[str]:
-    """Filtra y devuelve aquellas palabras del candidato que coinciden con el inventario oficial."""
+    """Filtra y devuelve aquellas palabras del candidato que coinciden con el inventario oficial, mapeando formas conjugadas."""
     target_set = set(get_all_target_lemmas(language, level))
     matched = []
+    seen = set()
     for w in candidate_words:
         w_clean = w.strip().lower()
-        if w_clean in target_set:
+        lemma = w_clean
+        if language.startswith("de") and w_clean in GERMAN_A1_INFLECTIONS:
+            lemma = GERMAN_A1_INFLECTIONS[w_clean]
+
+        if lemma in target_set and lemma not in seen:
+            seen.add(lemma)
+            matched.append(lemma)
+        elif w_clean in target_set and w_clean not in seen:
+            seen.add(w_clean)
             matched.append(w_clean)
     return matched
 
