@@ -182,17 +182,24 @@ class AzureSpeechService:
             return fallback
 
     def synthesize_speech(
-
-        self, text: str, language: str = "de-DE", slow: bool = False
+        self,
+        text: str,
+        language: str = "de-DE",
+        slow: bool = False,
+        voice_name: Optional[str] = None,
     ) -> Optional[bytes]:
-        """Sintetiza audio nativo con Azure TTS, con opción de velocidad pausada (0.8x) para principiantes A1."""
+        """Sintetiza audio nativo con Azure TTS, con opción de velocidad pausada (0.8x) y voz asignada por personaje."""
         if not self.is_available():
             return None
 
         try:
             speech_config = speechsdk.SpeechConfig(subscription=self.key, region=self.region)
-            voice_name = "de-DE-KatjaNeural" if language.startswith("de") else "en-US-JennyNeural"
-            speech_config.speech_synthesis_voice_name = voice_name
+            chosen_voice = (
+                voice_name
+                if voice_name
+                else ("de-DE-KatjaNeural" if language.startswith("de") else "en-US-JennyNeural")
+            )
+            speech_config.speech_synthesis_voice_name = chosen_voice
 
             speech_synthesizer = speechsdk.SpeechSynthesizer(
                 speech_config=speech_config, audio_config=None
@@ -209,7 +216,7 @@ class AzureSpeechService:
                 )
                 ssml = (
                     f"<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='{lang_code}'>"
-                    f"<voice name='{voice_name}'>"
+                    f"<voice name='{chosen_voice}'>"
                     f"<prosody rate='-20%'>{escaped_text}</prosody>"
                     f"</voice></speak>"
                 )

@@ -1062,10 +1062,14 @@ class TelegramCoachBot:
         hints = [f"• <i>{p}</i>" for p in scen.target_phrases[:3]]
         hints_str = "\n".join(hints)
 
+        char_avatar = getattr(scen, "avatar_emoji", "👤")
+        char_traits = getattr(scen, "personality_traits", "")
+        traits_block = f"✨ <b>Personalidad:</b> <i>{char_traits}</i>\n" if char_traits else ""
+
         # Diálogo reciente (últimos 4 turnos)
         dialogue_preview = []
         for t in turns[-4:]:
-            icon = "👤" if t.get("role") == "character" else "🎓"
+            icon = char_avatar if t.get("role") == "character" else "🎓"
             dialogue_preview.append(f"{icon} <b>{t.get('name')}:</b> {t.get('text')}")
         dialogue_text = "\n".join(dialogue_preview)
 
@@ -1082,7 +1086,8 @@ class TelegramCoachBot:
         card = (
             f"🎭 <b>{lang_badge} [{level}{u_badge}] — Misión de Conversación</b>\n"
             f"<b>Escenario:</b> {scen.title}\n"
-            f"👤 <b>Interlocutor:</b> {scen.character_name} (<i>{scen.character_role}</i>)\n"
+            f"{char_avatar} <b>Interlocutor:</b> <b>{scen.character_name}</b> (<i>{scen.character_role}</i>)\n"
+            f"{traits_block}"
             f"🎯 <b>Tu Misión:</b> {scen.mission_brief}\n\n"
             f"💡 <b>Frases de apoyo sugeridas:</b>\n{hints_str}\n\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -1179,6 +1184,8 @@ class TelegramCoachBot:
             dialogue_history=dialogue_history,
             user_message=user_text,
             language=lang,
+            personality_traits=getattr(scen, "personality_traits", ""),
+            catchphrases=getattr(scen, "catchphrases", None),
         )
 
         # 4. Registrar turno del personaje
@@ -1201,9 +1208,10 @@ class TelegramCoachBot:
         user_header = f'🗣️ <b>Tú:</b> <i>"{user_text}"</i>\n\n' if is_audio else ""
         tip_str = f"\n\n✨ <i>Tip amigable: {feedback_tip}</i>" if feedback_tip else ""
 
+        char_avatar = getattr(scen, "avatar_emoji", "👤")
         msg = (
             user_header
-            + f"👤 <b>{scen.character_name}:</b>\n"
+            + f"{char_avatar} <b>{scen.character_name}:</b>\n"
             f'"{char_reply}"\n\n'
             f"<tg-spoiler><i>🇪🇸 {char_es}</i></tg-spoiler>"
             f"{tip_str}"
@@ -1396,7 +1404,14 @@ class TelegramCoachBot:
             else active_conv.get("initial_greeting", "Hallo")
         )
 
-        wav_bytes = azure_service.text_to_speech(text=text_to_speak, language=lang, slow=slow)
+        scenario_id = active_conv.get("scenario_id")
+        scen = get_scenario_by_id(scenario_id, lang, state.get("level", "A1")) if scenario_id else None
+        voice_name = getattr(scen, "azure_voice_name", None) if scen else None
+        avatar = getattr(scen, "avatar_emoji", "👤") if scen else "👤"
+
+        wav_bytes = azure_service.text_to_speech(
+            text=text_to_speak, language=lang, slow=slow, voice_name=voice_name
+        )
         if not wav_bytes:
             await query.message.reply_text("⚠️ No se pudo generar el audio nativo de referencia.")
             return
@@ -1408,9 +1423,9 @@ class TelegramCoachBot:
         caption_flag = "🇩🇪" if lang.startswith("de") else "🇺🇸"
         icon = "🐢" if slow else "🔊"
         label = (
-            f"{icon} <b>Interlocutor ({active_conv.get('character_name', 'Personaje')} - 0.8x {caption_flag}):</b>"
+            f"{icon} <b>{avatar} {active_conv.get('character_name', 'Personaje')} (0.8x {caption_flag}):</b>"
             if slow
-            else f"{icon} <b>Interlocutor ({active_conv.get('character_name', 'Personaje')} - {caption_flag}):</b>"
+            else f"{icon} <b>{avatar} {active_conv.get('character_name', 'Personaje')} ({caption_flag}):</b>"
         )
         await query.message.reply_voice(
             voice=audio_stream,

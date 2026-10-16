@@ -402,6 +402,8 @@ class GeminiCoachService:
         dialogue_history: List[dict],
         user_message: str,
         language: str = "de-DE",
+        personality_traits: str = "",
+        catchphrases: Optional[List[str]] = None,
     ) -> dict:
         """
         Genera la réplica del personaje en un roleplay conversacional interactivo.
@@ -440,16 +442,28 @@ class GeminiCoachService:
                 ("Vielen Dank! Einen schönen Tag noch!", "¡Muchas gracias! ¡Que tenga un buen día!", ["Danke, gleichfalls!", "Tschüss!"]),
             ],
             "Lukas": [
-                ("Hallo! Freut mich. Wie heißt du?", "¡Hola! Mucho gusto. ¿Cómo te llamas?", ["Hallo! Ich bin...", "Freut mich! Ich heiße..."]),
-                ("Schön! Und woher kommst du?", "¡Genial! ¿Y de dónde eres?", ["Ich komme aus Kolumbien.", "Aus Spanien, und du?"]),
-                ("Interessant! Hast du Geschwister?", "¡Interesante! ¿Tienes hermanos?", ["Ja, einen Bruder.", "Nein, ich habe keine Geschwister."]),
-                ("Super! Schön dich kennenzulernen!", "¡Súper! ¡Un gusto conocerte!", ["Gleichfalls!", "Bis bald!"]),
+                ("Guten Morgen! Na, was darf es denn heute Leckeres sein?", "¡Buenos días! ¿Qué se te antoja de rico para hoy?", ["Ich möchte zwei Brötchen bitte.", "Ein Kaffee bitte!"]),
+                ("Alles klar! Geht sofort los. Möchtest du auch Milch oder Zucker dazu?", "¡Entendido! Sale de inmediato. ¿Deseas leche o azúcar?", ["Mit Milch bitte.", "Nein danke, schwarz."]),
+                ("Das macht vier Euro bitte. Wie viel möchtest du zahlen: bar oder mit Karte?", "Son cuatro euros por favor. ¿Cómo vas a pagar: efectivo o tarjeta?", ["Ich zahle bar.", "Mit Karte bitte."]),
+                ("Perfekt! Guten Appetit und einen schönen Tag noch!", "¡Perfecto! ¡Buen provecho y que tengas un lindo día!", ["Danke gleichfalls!", "Tschüss Lukas!"]),
+            ],
+            "Felix": [
+                ("Hallo! Bist du auch neu hier auf dem Campus? Erzähl mal, hast du Geschwister?", "¡Hola! ¿Tú también eres nuevo aquí en el campus? Cuéntame, ¿tienes hermanos?", ["Ich habe einen Bruder.", "Nein, keine Geschwister."]),
+                ("Ach so! Und wohnen deine Eltern auch in der Stadt?", "¡Ah, ya veo! ¿Y tus padres también viven en la ciudad?", ["Meine Eltern wohnen in...", "Nein, sie wohnen weit weg."]),
+                ("Mega interessant! Und wie alt bist du eigentlich?", "¡Mega interesante! ¿Y cuántos años tienes en realidad?", ["Ich bin zwanzig Jahre alt.", "Ich bin fünfundzwanzig."]),
+                ("Super! Schön dich kennenzulernen. Bis später auf dem Campus!", "¡Súper! Un gusto conocerte. ¡Hasta luego en el campus!", ["Bis später Felix!", "Tschüss!"]),
             ],
             "Anna": [
                 ("Hallo! Hast du am Samstag Zeit?", "¡Hola! ¿Tienes tiempo el sábado?", ["Ja, ich habe Zeit!", "Am Samstag kann ich."]),
-                ("Super! Um wie viel Uhr treffen wir uns?", "¡Estupendo! ¿A qué hora nos encontramos?", ["Um zehn Uhr?", "Um drei Uhr nachmittags."]),
-                ("Das passt mir gut! Wo treffen wir uns?", "¡Me viene muy bien! ¿Dónde nos encontramos?", ["Im Park?", "Am Bahnhof."]),
-                ("Perfekt! Dann bis Samstag. Tschüss!", "¡Perfecto! Entonces hasta el sábado. ¡Chao!", ["Bis Samstag!", "Tschüss Anna!"]),
+                ("Super Idee! Um wie viel Uhr treffen wir uns?", "¡Estupenda idea! ¿A qué hora nos encontramos?", ["Um zehn Uhr?", "Um drei Uhr nachmittags."]),
+                ("Das passt mir gut! Wo treffen wir uns?", "¡Me viene muy bien! ¿Dónde nos encontramos?", ["Im Park?", "Am Café."]),
+                ("Perfekt! Abgemacht, dann bis Samstag. Tschüss!", "¡Perfecto! ¡Trato hecho, hasta el sábado. Chao!", ["Bis Samstag!", "Tschüss Anna!"]),
+            ],
+            "Herr Becker": [
+                ("Guten Tag! Informationsschalter Hauptbahnhof. Wie kann ich Ihnen helfen?", "¡Buenas tardes! Mostrador de información de la estación central. ¿Cómo le puedo ayudar?", ["Wo ist der Bus?", "Entschuldigung, wo ist Gleis drei?"]),
+                ("Der Bus hält direkt vor dem Haupteingang. Die Züge nach München fahren auf Gleis drei ab.", "El autobús para justo frente a la entrada principal. Los trenes a Múnich salen del andén tres.", ["Vielen Dank!", "Danke für die Hilfe!"]),
+                ("Bitte sehr! Der nächste Zug fährt pünktlich um vierzehn Uhr.", "¡De nada! El próximo tren sale puntual a las catorce horas.", ["Sehr gut, danke!", "Auf Gleis drei, danke!"]),
+                ("Pünktlich wie die Bahn! Gute Reise und auf Wiedersehen!", "¡Puntual como el tren! ¡Buen viaje y hasta luego!", ["Auf Wiedersehen!", "Danke schön!"]),
             ],
             "Herr Weber": [
                 ("Guten Tag! Wie kann ich Ihnen helfen?", "¡Buenas tardes! ¿Cómo le puedo ayudar?", ["Wo ist der Bahnhof?", "Entschuldigung, wo ist der Zug?"]),
@@ -458,10 +472,10 @@ class GeminiCoachService:
                 ("Gute Reise und auf Wiedersehen!", "¡Buen viaje y hasta luego!", ["Auf Wiedersehen!", "Danke!"]),
             ],
             "Frau Wagner": [
-                ("Guten Tag! Was fehlt Ihnen denn?", "¡Buenas tardes! ¿Qué le ocurre?", ["Ich habe Kopfschmerzen.", "Mein Bauch tut weh."]),
+                ("Guten Tag! Was fehlt Ihnen denn? Wie kann ich helfen?", "¡Buenas tardes! ¿Qué le ocurre? ¿Cómo le puedo ayudar?", ["Ich habe Kopfschmerzen.", "Mein Bauch tut weh."]),
                 ("Haben Sie auch Fieber?", "¿Tiene también fiebre?", ["Nein, kein Fieber.", "Ja, ein bisschen Fieber."]),
                 ("Hier sind Tabletten gegen die Schmerzen. Nehmen Sie eine mit Wasser.", "Aquí tiene pastillas para el dolor. Tome una con agua.", ["Vielen Dank Frau Wagner.", "Wie oft am Tag?"]),
-                ("Gute Besserung und auf Wiedersehen!", "¡Que se mejore y hasta luego!", ["Danke sehr, auf Wiedersehen!", "Tschüss!"]),
+                ("Keine Sorge, das hilft schnell. Gute Besserung und auf Wiedersehen!", "¡No se preocupe, esto alivia rápido. Que se mejore y hasta luego!", ["Danke sehr, auf Wiedersehen!", "Tschüss!"]),
             ],
         }
 
@@ -473,34 +487,34 @@ class GeminiCoachService:
                 ("Thank you! Please take a seat.", "¡Gracias! Por favor toma asiento.", ["Thank you!", "Thanks a lot!"]),
             ],
             "Tom": [
-                ("Hello! What can I get for you today?", "¡Hola! ¿Qué te puedo servir hoy?", ["A coffee, please.", "Can I have a tea?"]),
-                ("Sure thing! Would you like coffee or tea?", "¡Claro que sí! ¿Te gustaría café o té?", ["Coffee, please.", "Tea with milk, please."]),
-                ("That is four pounds please. Cash or card?", "Son cuatro libras por favor. ¿Efectivo o tarjeta?", ["Cash, please.", "By card, please."]),
-                ("Thank you! Have a great day!", "¡Gracias! ¡Que tengas un gran día!", ["Thank you, you too!", "Bye!"]),
+                ("Hello there! What can I get started for you today?", "¡Hola! A ver, ¿qué te puedo preparar hoy?", ["A coffee, please.", "Can I have a tea and croissant?"]),
+                ("Right away! Would you like coffee with milk or sugar?", "¡Sale enseguida! ¿Te gustaría café con leche o azúcar?", ["With milk, please.", "Black coffee, please."]),
+                ("That is four pounds please. Cash or card, mate?", "Son cuatro libras por favor. ¿Efectivo o tarjeta, amigo?", ["Cash, please.", "By card, please."]),
+                ("Cheers mate! Have a lovely day ahead!", "¡Gracias amigo! ¡Que tengas un lindo día!", ["Thank you, you too!", "Cheers Tom!"]),
             ],
             "Oliver": [
-                ("Hi! What is your name?", "¡Hola! ¿Cuál es tu nombre?", ["Hi! I am...", "My name is..."]),
-                ("Nice to meet you! Where are you from?", "¡Gusto en conocerte! ¿De dónde eres?", ["I am from Colombia.", "I am from Spain."]),
-                ("Cool! Do you have any brothers or sisters?", "¡Genial! ¿Tienes hermanos o hermanas?", ["Yes, one brother.", "No, I am an only child."]),
-                ("Awesome! Great to meet you!", "¡Estupendo! ¡Gusto en conocerte!", ["Nice to meet you too!", "See you!"]),
+                ("Hi! Great to meet you. Do you have any brothers or sisters back home?", "¡Hola! Un gusto conocerte. ¿Tienes hermanos o hermanas en tu ciudad?", ["I have one brother.", "No, I am an only child."]),
+                ("That's awesome! Where do your parents live?", "¡Qué bien! ¿Dónde viven tus padres?", ["My parents live in Spain.", "They live in Colombia."]),
+                ("Sounds cool! How old are you, by the way?", "¡Suena genial! ¿Cuántos años tienes, por cierto?", ["I am twenty years old.", "I am twenty-five."]),
+                ("Brilliant! Really great to meet you flatmate!", "¡Brillante! ¡Genial conocerte compañero de piso!", ["Nice to meet you too Oliver!", "See you!"]),
             ],
             "Sarah": [
-                ("Hey! Are you free this weekend?", "¡Hola! ¿Estás libre este fin de semana?", ["Yes, I am free!", "Sure, what is up?"]),
-                ("Great! What time should we meet?", "¡Genial! ¿A qué hora nos encontramos?", ["At two o'clock?", "Around five?"]),
-                ("That works for me! Where do you want to go?", "¡Me sirve! ¿A dónde quieres ir?", ["To the park?", "To the cafe."]),
-                ("Perfect! See you then!", "¡Perfecto! ¡Nos vemos entonces!", ["See you then!", "Bye Sarah!"]),
+                ("Hey! Are you free this weekend? What time should we meet up?", "¡Hola! ¿Estás libre este fin de semana? ¿A qué hora deberíamos encontrarnos?", ["On Saturday at two?", "Yes, I am free!"]),
+                ("Sounds like a plan! Where do you want to go?", "¡Me parece un gran plan! ¿A dónde quieres ir?", ["To the park?", "To the cafe for brunch."]),
+                ("Can't wait! At three o'clock sounds totally perfect for me.", "¡No puedo esperar! A las tres me queda totalmente perfecto.", ["Awesome!", "See you at three."]),
+                ("Perfect! See you on Saturday! Bye!", "¡Perfecto! ¡Nos vemos el sábado! ¡Chao!", ["See you then!", "Bye Sarah!"]),
             ],
             "Officer Davis": [
-                ("Hello! Can I help you with directions?", "¡Hola! ¿Puedo ayudarte con direcciones?", ["Excuse me, where is the train station?", "Where is the bus stop?"]),
-                ("The station is straight ahead and then on your left.", "La estación está todo derecho y luego a tu izquierda.", ["Thank you very much!", "Thanks!"]),
-                ("The bus stop is just across the street.", "La parada de autobús está cruzando la calle.", ["Got it, thank you!", "Thanks for your help!"]),
-                ("You are very welcome. Have a safe trip!", "De nada. ¡Que tengas un buen viaje!", ["Thank you, goodbye!", "Bye!"]),
+                ("Hello there! Can I help you with directions today?", "¡Hola! ¿Puedo ayudarte con direcciones hoy?", ["Excuse me, where is the station?", "Where is the bus stop?"]),
+                ("The underground station is straight ahead and then on your left.", "La estación del metro está todo derecho y luego a tu izquierda.", ["Thank you very much!", "Thanks officer!"]),
+                ("Mind the gap on the platform, and the bus stop is just across the street.", "Cuidado con el hueco en el andén, y la parada de autobús está cruzando la calle.", ["Got it, thank you!", "Thanks for your help!"]),
+                ("You are very welcome. Have a safe trip around London!", "De nada. ¡Que tengas un viaje seguro por Londres!", ["Thank you, goodbye!", "Bye!"]),
             ],
             "Dr. Jenkins": [
-                ("Hello! What is the problem today?", "¡Hola! ¿Cuál es el problema hoy?", ["I have a headache.", "I have a sore throat."]),
-                ("Do you also have a fever?", "¿Tienes también fiebre?", ["No, no fever.", "Yes, a little bit."]),
-                ("Here is some medicine for the pain. Take one with water.", "Aquí tienes medicina para el dolor. Toma una con agua.", ["Thank you doctor.", "How many times a day?"]),
-                ("Get well soon and take care!", "¡Que te mejores pronto y cuídate!", ["Thank you, take care!", "Goodbye!"]),
+                ("Hello. What seems to be the problem today?", "Hola. ¿Cuál parece ser el problema hoy?", ["I have a headache.", "I have a sore throat."]),
+                ("I see. Do you also have a fever?", "Ya veo. ¿Tienes también fiebre?", ["No, no fever.", "Yes, a little bit."]),
+                ("Here is some mild medicine for the headache. Take one tablet with water.", "Aquí tienes medicina suave para el dolor de cabeza. Toma una pastilla con agua.", ["Thank you doctor.", "How many times a day?"]),
+                ("Take care now, drink plenty of water, and get well soon!", "¡Cuídate, bebe mucha agua y que te mejores pronto!", ["Thank you, doctor!", "Goodbye!"]),
             ],
         }
 
@@ -530,11 +544,21 @@ class GeminiCoachService:
                 "suggested_replies": sugg_replies,
             }
 
+        persona_context = ""
+        if personality_traits or catchphrases:
+            catch_str = f"Muletillas habituales (úsala si encaja natural): {', '.join(catchphrases)}" if catchphrases else ""
+            persona_context = (
+                f"PERFIL Y PERSONALIDAD DEL PERSONAJE ({character_name} - ESTILO LINGOLOOPER):\n"
+                f"- Rasgos: {personality_traits}\n"
+                f"- {catch_str}\n\n"
+            )
+
         prompt = (
             f"Actúas como {character_name} ({character_role}) en una conversación interactiva de la vida real con un alumno hispanohablante aprendiendo {lang_name} (nivel CEFR A1/A2).\n"
             f"Escenario: {scenario_title}\n"
             f"Misión del alumno: {mission_brief}\n"
             f"Frases clave esperadas: {', '.join(target_phrases)}\n\n"
+            f"{persona_context}"
             f"Historial del diálogo previo:\n{history_text}\n"
             f"- Alumno (último mensaje que acaba de enviar): {user_message}\n\n"
             f"PEDAGOGÍA MODERNA Y FILOSOFÍA DE CONVERSACIÓN (MÁXIMA PRIORIDAD):\n"
