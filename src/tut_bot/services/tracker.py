@@ -25,8 +25,11 @@ class ProgressTracker:
         self._init_db()
 
     def _get_connection(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self.db_path), timeout=10)
+        conn = sqlite3.connect(str(self.db_path), timeout=15)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode = WAL")
+        conn.execute("PRAGMA synchronous = NORMAL")
+        conn.execute("PRAGMA busy_timeout = 10000")
         return conn
 
     def _init_db(self):
@@ -163,7 +166,18 @@ class ProgressTracker:
             # Migración y saneamiento CEFR: Corregir registros legados donde A2 fue desbloqueado
             # o A1 marcado como completo sin examen aprobado en user_exams.
             cursor.execute(
-                "SELECT user_id, language, level, unlocked_levels, passed_levels, fsm_state FROM user_states"
+                """
+                SELECT user_id, language, level, unlocked_levels, passed_levels, fsm_state
+                FROM user_states
+                WHERE level != 'A1'
+                   OR unlocked_levels LIKE '%A2%'
+                   OR unlocked_levels LIKE '%B1%'
+                   OR fsm_state = 'LEVEL_COMPLETED'
+                   OR passed_levels LIKE '%_speaking%'
+                   OR passed_levels LIKE '%_writing%'
+                   OR passed_levels LIKE '%_listening%'
+                   OR passed_levels LIKE '%_certified%'
+                """
             )
             rows = cursor.fetchall()
             now_iso = datetime.now(timezone.utc).isoformat()

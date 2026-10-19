@@ -58,7 +58,9 @@ class AudioConverter:
                 "pcm_s16le",
                 out_path,
             ]
-            result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            result = subprocess.run(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15
+            )
             if result.returncode != 0:
                 logger.error(
                     f"Fallo al convertir OGG a WAV: {result.stderr.decode('utf-8', errors='ignore')}"
@@ -67,6 +69,9 @@ class AudioConverter:
 
             with open(out_path, "rb") as f_out:
                 return f_out.read()
+        except subprocess.TimeoutExpired:
+            logger.error("Timeout (15s) excedido al ejecutar FFmpeg para convertir OGG a WAV.")
+            return None
         except Exception as e:
             logger.error(f"Excepción convirtiendo OGG a WAV: {e}")
             return None
@@ -99,7 +104,9 @@ class AudioConverter:
                 "48000",
                 out_path,
             ]
-            result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            result = subprocess.run(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15
+            )
             if result.returncode != 0:
                 # Si libopus no está disponible, intentar OGG genérico
                 cmd_fallback = [
@@ -114,7 +121,7 @@ class AudioConverter:
                     out_path,
                 ]
                 result_fb = subprocess.run(
-                    cmd_fallback, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                    cmd_fallback, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15
                 )
                 if result_fb.returncode != 0:
                     logger.error(
@@ -124,6 +131,9 @@ class AudioConverter:
 
             with open(out_path, "rb") as f_out:
                 return f_out.read()
+        except subprocess.TimeoutExpired:
+            logger.error("Timeout (15s) excedido al ejecutar FFmpeg para convertir WAV a OGG.")
+            return None
         except Exception as e:
             logger.error(f"Excepción convirtiendo WAV a OGG: {e}")
             return None

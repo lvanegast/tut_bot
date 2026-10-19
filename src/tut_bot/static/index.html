@@ -63,22 +63,47 @@
     <!-- Main Container -->
     <main class="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
 
-        <!-- Selector de Modo / Categorías -->
+        <!-- Selector de Modo / Filtros (Nivel, Habilidad, Categoría) -->
         <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm space-y-4">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div class="flex items-center gap-2">
                     <button id="tab-curated" onclick="setMode('curated')" class="px-4 py-2 rounded-xl text-sm font-bold bg-indigo-50 text-indigo-600 border border-indigo-200 transition-all">
-                        📚 Ejercicios Fonéticos
+                        📚 Ejercicios Curados
                     </button>
                     <button id="tab-custom" onclick="setMode('custom')" class="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 transition-all">
                         ✍️ Práctica Libre
                     </button>
                 </div>
-                <div id="category-selector-container" class="flex items-center gap-2 text-sm">
-                    <label class="text-slate-500 font-medium">Categoría:</label>
-                    <select id="category-select" onchange="filterByCategory()" class="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        <option value="">Todas las categorías</option>
-                    </select>
+                <div id="category-selector-container" class="flex flex-wrap items-center gap-2.5 text-sm">
+                    <!-- Filtro de Nivel CEFR -->
+                    <div class="flex items-center gap-1.5">
+                        <label class="text-slate-500 font-medium text-xs">Nivel:</label>
+                        <select id="level-select" onchange="filterExercises()" class="bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5 font-semibold text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="">Todos (A1, A2, B1)</option>
+                            <option value="A1">A1 (Acceso)</option>
+                            <option value="A2">A2 (Plataforma)</option>
+                            <option value="B1">B1 (Umbral)</option>
+                        </select>
+                    </div>
+
+                    <!-- Filtro de Habilidad -->
+                    <div class="flex items-center gap-1.5">
+                        <label class="text-slate-500 font-medium text-xs">Habilidad:</label>
+                        <select id="skill-select" onchange="filterExercises()" class="bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5 font-semibold text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="">Todas las habilidades</option>
+                            <option value="speaking">🗣️ Hablar (Speaking)</option>
+                            <option value="listening">👂 Escuchar (Listening)</option>
+                            <option value="writing">✍️ Escribir (Writing)</option>
+                        </select>
+                    </div>
+
+                    <!-- Filtro de Categoría -->
+                    <div class="flex items-center gap-1.5">
+                        <label class="text-slate-500 font-medium text-xs">Categoría:</label>
+                        <select id="category-select" onchange="filterExercises()" class="bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5 font-semibold text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 max-w-[200px] truncate">
+                            <option value="">Todas las categorías</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -101,8 +126,9 @@
         <!-- Tarjeta de Frase Objetivo -->
         <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-sm relative overflow-hidden">
             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                <div class="flex items-center gap-2">
+                <div class="flex flex-wrap items-center gap-2">
                     <span id="exercise-level" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-100 text-amber-800">A1</span>
+                    <span id="exercise-skill-badge" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-100 text-indigo-800">🗣️ Hablar</span>
                     <span id="exercise-category" class="px-3 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600">ich-Laut vs ach-Laut</span>
                 </div>
                 <div id="focus-phonemes-container" class="flex items-center gap-1.5">
@@ -110,12 +136,29 @@
                 </div>
             </div>
 
+            <!-- Bloque de Andamiaje Previo Obligatorio (Krashen i+1) -->
+            <div id="scaffolding-box" class="hidden mb-4 p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200/70 space-y-2">
+                <div class="flex items-center gap-2 text-amber-900 font-bold text-xs uppercase tracking-wider">
+                    <span>🔑</span>
+                    <span>Vocabulario de apoyo esencial:</span>
+                </div>
+                <div id="scaffolding-terms-container" class="flex flex-wrap gap-2 text-xs">
+                    <!-- Términos inyectados dinámicamente -->
+                </div>
+            </div>
+
+            <!-- Consigna / Prompt Pedagógico -->
+            <div id="exercise-prompt-box" class="hidden mb-4 p-3.5 rounded-2xl bg-indigo-50/80 border border-indigo-200 text-sm font-semibold text-indigo-950 flex items-center gap-2">
+                <span id="exercise-prompt-icon">💡</span>
+                <span id="exercise-prompt-text"></span>
+            </div>
+
             <!-- Vista Ejercicio Curado -->
             <div id="curated-view" class="space-y-3">
                 <h2 id="target-sentence" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight leading-snug">
                     Ich spreche kein Deutsch.
                 </h2>
-                <div class="flex flex-wrap items-center gap-2">
+                <div id="phonetic-guides-row" class="flex flex-wrap items-center gap-2">
                     <span id="target-guide" class="text-sm font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-3 py-1 rounded-xl shadow-xs">
                         🗣️ Pronunciación: "Ij shpreje kain doitch"
                     </span>
@@ -127,6 +170,27 @@
                 <p id="target-translation" class="text-base text-slate-500 font-medium">
                     "No hablo alemán."
                 </p>
+
+                <!-- Cuestionario Interactivo para Comprensión Auditiva (Listening) -->
+                <div id="listening-quiz-container" class="hidden my-4 space-y-2.5 pt-2">
+                    <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider">¿Qué comprendiste en el audio? Elige una opción:</label>
+                    <div id="listening-options-list" class="space-y-2">
+                        <!-- Opciones múltiples -->
+                    </div>
+                    <div id="listening-feedback-box" class="hidden p-3.5 rounded-2xl text-sm font-semibold"></div>
+                </div>
+
+                <!-- Entrada Interactiva para Expresión Escrita (Writing) -->
+                <div id="writing-quiz-container" class="hidden my-4 space-y-3 pt-2">
+                    <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider">Escribe tu respuesta en alemán o inglés:</label>
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <input type="text" id="writing-user-input" placeholder="Escribe aquí tu frase..." class="flex-1 p-3.5 border border-slate-300 rounded-2xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-base">
+                        <button id="writing-check-btn" onclick="checkWritingAnswer()" class="px-6 py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md transition-all">
+                            Comprobar
+                        </button>
+                    </div>
+                    <div id="writing-feedback-box" class="hidden p-4 rounded-2xl text-sm space-y-2"></div>
+                </div>
             </div>
 
             <!-- Vista Texto Libre (Oculta por defecto) -->
@@ -143,16 +207,21 @@
                 </p>
             </div>
 
-            <!-- Botones de Acción: Escuchar Referencia & Grabar -->
-            <div class="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-                <!-- Botón Escuchar Referencia -->
-                <button id="tts-btn" onclick="playNativeAudio()" class="w-full sm:w-auto px-6 py-3.5 rounded-2xl border border-slate-300 hover:border-indigo-400 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm flex items-center justify-center gap-2.5 transition-all shadow-sm">
-                    <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg>
-                    <span id="tts-btn-text">Escuchar Referencia Nativa</span>
-                </button>
+            <!-- Botones de Acción: Escuchar Referencia Dual (1.0x / 0.8x) & Grabar -->
+            <div class="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+                <!-- Dual Speed TTS -->
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <button id="tts-btn" onclick="playNativeAudio(false)" class="flex-1 sm:flex-initial px-5 py-3.5 rounded-2xl border border-slate-300 hover:border-indigo-400 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-sm">
+                        <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg>
+                        <span id="tts-btn-text">🔊 Escuchar (1.0x)</span>
+                    </button>
+                    <button id="tts-slow-btn" onclick="playNativeAudio(true)" class="flex-1 sm:flex-initial px-4 py-3.5 rounded-2xl border border-amber-300 hover:border-amber-400 bg-amber-50 hover:bg-amber-100/70 text-amber-900 font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-sm" title="Escuchar a velocidad pausada (-20%) para segmentar fonemas">
+                        <span id="tts-slow-btn-text">🐢 Lento (0.8x)</span>
+                    </button>
+                </div>
 
                 <!-- Botón Grabar / Detener -->
-                <button id="record-btn" onclick="toggleRecording()" class="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold text-sm flex items-center justify-center gap-3 transition-all shadow-lg shadow-indigo-200">
+                <button id="record-btn" onclick="toggleRecording()" class="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold text-sm flex items-center justify-center gap-3 transition-all shadow-lg shadow-indigo-200">
                     <span id="record-icon" class="w-3.5 h-3.5 rounded-full bg-red-400"></span>
                     <span id="record-btn-text">Grabar Mi Pronunciación</span>
                     <span id="record-timer" class="hidden text-xs bg-indigo-900/40 px-2 py-0.5 rounded-md font-mono">00:00</span>

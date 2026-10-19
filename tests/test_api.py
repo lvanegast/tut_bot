@@ -620,6 +620,168 @@ def test_cefr_state_sanitization_and_reset():
     tracker.cancel_final_exam(user_id)
 
 
+def test_telegram_cmd_status_no_attribute_error():
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+
+    from tut_bot.services.telegram_bot import TelegramCoachBot
+
+    bot = TelegramCoachBot(token="123456:TEST_TOKEN")
+    update = MagicMock()
+    update.effective_message.reply_text = AsyncMock()
+    context = MagicMock()
+
+    # Ejecutar cmd_status
+    asyncio.run(bot.cmd_status(update, context))
+
+    assert update.effective_message.reply_text.called
+    call_args = update.effective_message.reply_text.call_args[0]
+    sent_text = call_args[0]
+    assert "Estado del Sistema tut_bot" in sent_text
+
+
+def test_evaluate_oversized_audio_rejection():
+    # Payload que excede 5 MB
+    large_payload = b"\x00" * (6 * 1024 * 1024)
+    response = client.post(
+        "/api/evaluate",
+        data={
+            "reference_text": "Hallo",
+            "language": "de-DE",
+        },
+        files={"audio": ("large.wav", large_payload, "audio/wav")},
+    )
+    assert response.status_code == 400
+    assert "5 MB" in response.json()["detail"]
+
+
+def test_cors_w3c_compliance():
+    headers = {
+        "Origin": "http://example.com",
+        "Access-Control-Request-Method": "POST",
+    }
+    response = client.options("/api/evaluate", headers=headers)
+    assert response.status_code == 200
+    assert response.headers.get("access-control-allow-credentials") != "true"
+
+
+def test_sqlite_wal_mode_and_pragmas():
+    from tut_bot.services.tracker import tracker
+
+    with tracker._get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA journal_mode")
+        mode = cursor.fetchone()[0]
+        assert str(mode).lower() == "wal"
+
+        cursor.execute("PRAGMA synchronous")
+        sync_val = cursor.fetchone()[0]
+        # En SQLite, NORMAL se representa numéricamente como 1
+        assert sync_val in (1, "NORMAL", "normal")
+
+
+def test_telegram_cards_and_formatters_modular_builders():
+    from tut_bot.services.telegram.cards import build_stats_card
+    from tut_bot.services.telegram.formatters import (
+        _format_markdown_for_telegram,
+        _make_progress_bar,
+        get_phoneme_explanation,
+        get_phoneme_friendly_label,
+    )
+
+    # 1. Test formatters
+    bar = _make_progress_bar(50)
+    assert len(bar) == 10
+    assert bar.count("█") == 5
+    assert bar.count("░") == 5
+
+    label_de = get_phoneme_friendly_label("ç", "de-DE")
+    assert "ch suave" in label_de
+
+    expl_de = get_phoneme_explanation("ç", "de-DE")
+    assert "paladar" in expl_de.lower()
+
+    md_conv = _format_markdown_for_telegram("**negrita** y *cursiva*")
+    assert "<b>negrita</b>" in md_conv
+    assert "<i>cursiva</i>" in md_conv
+
+    # 2. Test build_stats_card
+    mock_stats = {
+        "total_attempts": 3,
+        "average_accuracy": 85.0,
+        "average_fluency": 80.0,
+        "weak_phonemes": ["ç", "z"],
+    }
+    mock_state = {
+        "language": "de-DE",
+        "level": "A1",
+        "completed_exercises": ["ex_1"],
+    }
+    mock_lex_prog = {
+        "mastered_count": 10,
+        "total_target": 650,
+        "percentage": 1.5,
+    }
+    text, reply_markup = build_stats_card(mock_stats, mock_state, mock_lex_prog)
+    assert "Estadísticas" in text
+    assert "Goethe Start Deutsch 1" in text
+    assert "<code>/ç/</code>" in text
+    assert len(reply_markup.inline_keyboard) >= 2
+
+
+def test_writing_evaluation_endpoint():
+    # 1. Validación de entrada vacía
+    res_empty = client.post(
+        "/api/evaluate-writing",
+        json={
+            "user_input": "   ",
+            "target_text": "Guten Tag",
+            "prompt": "Saluda",
+            "language": "de-DE",
+            "level": "A1",
+        },
+    )
+    assert res_empty.status_code == 400
+
+    # 2. Evaluación de coincidencia perfecta
+    res_correct = client.post(
+        "/api/evaluate-writing",
+        json={
+            "user_input": "Hallo, ich heiße Carlos.",
+            "target_text": "Hallo, ich heiße Carlos.",
+            "prompt": "Preséntate",
+            "language": "de-DE",
+            "level": "A1",
+        },
+    )
+    assert res_correct.status_code == 200
+    data = res_correct.json()
+    assert data["is_correct"] is True
+    assert data["score"] == 100.0
+    assert "Excelente" in data["pedagogical_feedback"]
+
+
+def test_tts_endpoint_and_static_ui_parity():
+    # 1. Comprobar que index.html incluye los controles de paridad con Telegram
+    res_index = client.get("/")
+    assert res_index.status_code == 200
+    html = res_index.text
+    assert "level-select" in html
+    assert "skill-select" in html
+    assert "tts-slow-btn" in html
+    assert "scaffolding-box" in html
+    assert "listening-quiz-container" in html
+    assert "writing-quiz-container" in html
+
+    # 2. Comprobar endpoint /api/tts con parámetro slow
+    res_tts = client.post(
+        "/api/tts",
+        json={"text": "Guten Morgen", "language": "de-DE", "slow": True},
+    )
+    # En entorno de prueba sin Azure Speech key configurada responde 503 (esperado y controlado)
+    assert res_tts.status_code in (200, 503)
+
+
 if __name__ == "__main__":
     test_health_endpoint()
     test_exercises_endpoints()
@@ -637,5 +799,12 @@ if __name__ == "__main__":
     test_conversation_roleplay_service()
     test_all_units_have_distinct_exercises_and_no_unwanted_repetition()
     test_cefr_state_sanitization_and_reset()
+    test_telegram_cmd_status_no_attribute_error()
+    test_evaluate_oversized_audio_rejection()
+    test_cors_w3c_compliance()
+    test_sqlite_wal_mode_and_pragmas()
+    test_telegram_cards_and_formatters_modular_builders()
+    test_writing_evaluation_endpoint()
+    test_tts_endpoint_and_static_ui_parity()
     print("\n[EXITO] Todas las pruebas unitarias pasaron correctamente!")
 

@@ -128,17 +128,35 @@ async function loadCategories() {
     }
 }
 
-// Filtrar por categoría seleccionada
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+// Filtrar por nivel, habilidad o categoría
+async function filterExercises() {
+    await loadExercises();
+}
+
 async function filterByCategory() {
     await loadExercises();
 }
 
-// Cargar Ejercicios
+// Cargar Ejercicios con filtros opcionales
 async function loadExercises() {
     try {
-        const cat = document.getElementById('category-select').value;
+        const cat = document.getElementById('category-select')?.value || '';
+        const level = document.getElementById('level-select')?.value || '';
+        const skill = document.getElementById('skill-select')?.value || '';
+
         let url = `/api/exercises?language=${currentLanguage}`;
         if (cat) url += `&category=${encodeURIComponent(cat)}`;
+        if (level) url += `&level=${encodeURIComponent(level)}`;
+        if (skill) url += `&skill_type=${encodeURIComponent(skill)}`;
 
         const res = await fetch(url);
         exercises = await res.json();
@@ -151,15 +169,77 @@ async function loadExercises() {
 
 // Renderizar Ejercicio Actual
 function renderExercise() {
-    if (!exercises || exercises.length === 0) return;
+    if (!exercises || exercises.length === 0) {
+        document.getElementById('target-sentence').textContent = "No hay ejercicios con los filtros seleccionados.";
+        document.getElementById('exercise-counter').textContent = "0 de 0";
+        return;
+    }
     const ex = exercises[currentIndex];
 
-    document.getElementById('exercise-level').textContent = ex.level;
-    document.getElementById('exercise-category').textContent = ex.category;
-    document.getElementById('target-sentence').textContent = ex.target_text;
+    // Nivel
+    const levelBadge = document.getElementById('exercise-level');
+    if (levelBadge) levelBadge.textContent = ex.level || 'A1';
+
+    // Badge de Habilidad (Speaking, Listening, Writing)
+    const skillBadge = document.getElementById('exercise-skill-badge');
+    if (skillBadge) {
+        const skillType = ex.skill_type || 'speaking';
+        if (skillType === 'listening') {
+            skillBadge.className = "px-2.5 py-1 rounded-lg text-xs font-bold bg-sky-100 text-sky-800";
+            skillBadge.textContent = "👂 Escuchar (Listening)";
+        } else if (skillType === 'writing') {
+            skillBadge.className = "px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800";
+            skillBadge.textContent = "✍️ Escribir (Writing)";
+        } else {
+            skillBadge.className = "px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-100 text-indigo-800";
+            skillBadge.textContent = "🗣️ Hablar (Speaking)";
+        }
+    }
+
+    // Categoría / Unidad
+    const catBadge = document.getElementById('exercise-category');
+    if (catBadge) catBadge.textContent = ex.unit_title || ex.category;
+
+    // Andamiaje Previo Obligatorio (Krashen i+1)
+    const scaffoldBox = document.getElementById('scaffolding-box');
+    const scaffoldTerms = document.getElementById('scaffolding-terms-container');
+    if (scaffoldBox && scaffoldTerms) {
+        scaffoldTerms.innerHTML = '';
+        const breakdown = ex.vocabulary_breakdown;
+        if (breakdown && Object.keys(breakdown).length > 0) {
+            for (const [term, trans] of Object.entries(breakdown)) {
+                const pill = document.createElement('div');
+                pill.className = "flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white border border-amber-200/90 shadow-2xs font-medium";
+                pill.innerHTML = `<span class="font-bold text-slate-800">${escapeHtml(term)}:</span> <span class="text-slate-600">${escapeHtml(trans)}</span>`;
+                scaffoldTerms.appendChild(pill);
+            }
+            scaffoldBox.classList.remove('hidden');
+        } else {
+            scaffoldBox.classList.add('hidden');
+        }
+    }
+
+    // Consigna / Prompt Pedagógico
+    const promptBox = document.getElementById('exercise-prompt-box');
+    const promptText = document.getElementById('exercise-prompt-text');
+    if (promptBox && promptText) {
+        if (ex.prompt) {
+            promptText.textContent = ex.prompt;
+            promptBox.classList.remove('hidden');
+        } else {
+            promptBox.classList.add('hidden');
+        }
+    }
+
+    // Texto Objetivo y Guías
+    const targetSentenceElem = document.getElementById('target-sentence');
+    const phoneticGuidesRow = document.getElementById('phonetic-guides-row');
+    const notesElem = document.getElementById('target-notes');
+    const translationElem = document.getElementById('target-translation');
+
+    targetSentenceElem.textContent = ex.target_text;
     document.getElementById('target-ipa').textContent = ex.ipa ? `/${ex.ipa}/` : '';
 
-    // Pronunciación figurada fácil en español
     const guideElem = document.getElementById('target-guide');
     if (guideElem) {
         if (ex.phonetic_guide) {
@@ -170,8 +250,6 @@ function renderExercise() {
         }
     }
 
-    // Notas de equivalencias de símbolos IPA
-    const notesElem = document.getElementById('target-notes');
     if (notesElem) {
         if (ex.phonetic_notes) {
             notesElem.textContent = `💡 Equivalencias: ${ex.phonetic_notes}`;
@@ -181,11 +259,11 @@ function renderExercise() {
         }
     }
 
-    document.getElementById('target-translation').textContent = `"${ex.translation_es}"`;
+    translationElem.textContent = `"${ex.translation_es}"`;
     document.getElementById('exercise-tip').textContent = ex.tip;
     document.getElementById('exercise-counter').textContent = `Ejercicio ${currentIndex + 1} de ${exercises.length}`;
 
-    // Renderizar fonemas clave
+    // Fonemas clave
     const phonemesContainer = document.getElementById('focus-phonemes-container');
     phonemesContainer.innerHTML = '';
     (ex.focus_phonemes || []).forEach(p => {
@@ -195,11 +273,151 @@ function renderExercise() {
         phonemesContainer.appendChild(span);
     });
 
-    // Actualizar Atlas Fonético y Articulatorio Gráfico
+    // Control de Vistas por Habilidad
+    const listeningContainer = document.getElementById('listening-quiz-container');
+    const writingContainer = document.getElementById('writing-quiz-container');
+    const recordBtn = document.getElementById('record-btn');
+
+    if (ex.skill_type === 'listening') {
+        if (phoneticGuidesRow) phoneticGuidesRow.classList.add('hidden');
+        if (writingContainer) writingContainer.classList.add('hidden');
+
+        // Configurar opciones de comprensión
+        if (listeningContainer) {
+            listeningContainer.classList.remove('hidden');
+            const optionsList = document.getElementById('listening-options-list');
+            const feedbackBox = document.getElementById('listening-feedback-box');
+            if (feedbackBox) feedbackBox.classList.add('hidden');
+            if (optionsList) {
+                optionsList.innerHTML = '';
+                (ex.options || []).forEach((opt, idx) => {
+                    const btn = document.createElement('button');
+                    btn.className = "w-full text-left p-3.5 rounded-2xl border border-slate-200 hover:border-indigo-400 bg-white hover:bg-slate-50 font-medium text-slate-800 text-sm transition-all shadow-xs flex items-center justify-between";
+                    btn.innerHTML = `<span>${escapeHtml(opt)}</span> <span class="text-xs text-slate-400 font-mono">Opción ${idx + 1}</span>`;
+                    btn.onclick = () => selectListeningOption(idx);
+                    optionsList.appendChild(btn);
+                });
+            }
+        }
+        if (recordBtn) recordBtn.classList.add('hidden');
+    } else if (ex.skill_type === 'writing') {
+        if (phoneticGuidesRow) phoneticGuidesRow.classList.add('hidden');
+        if (listeningContainer) listeningContainer.classList.add('hidden');
+
+        // Configurar input de escritura
+        if (writingContainer) {
+            writingContainer.classList.remove('hidden');
+            const input = document.getElementById('writing-user-input');
+            const feedbackBox = document.getElementById('writing-feedback-box');
+            if (input) input.value = '';
+            if (feedbackBox) feedbackBox.classList.add('hidden');
+        }
+        if (recordBtn) recordBtn.classList.add('hidden');
+    } else {
+        // Modo Speaking habitual
+        if (phoneticGuidesRow) phoneticGuidesRow.classList.remove('hidden');
+        if (listeningContainer) listeningContainer.classList.add('hidden');
+        if (writingContainer) writingContainer.classList.add('hidden');
+        if (recordBtn) recordBtn.classList.remove('hidden');
+    }
+
+    // Actualizar Atlas Fonético
     updateVisualAtlas(ex);
 
     // Ocultar resultados previos
     document.getElementById('results-card').classList.add('hidden');
+}
+
+// Selección de alternativa en Comprensión Auditiva (Listening)
+function selectListeningOption(index) {
+    const ex = exercises[currentIndex];
+    if (!ex || !ex.options) return;
+    const feedbackBox = document.getElementById('listening-feedback-box');
+    const isCorrect = (index === ex.correct_option_index);
+
+    const buttons = document.querySelectorAll('#listening-options-list button');
+    buttons.forEach((btn, idx) => {
+        btn.disabled = true;
+        if (idx === ex.correct_option_index) {
+            btn.className = "w-full text-left p-3.5 rounded-2xl border-2 border-emerald-500 bg-emerald-50 text-emerald-900 font-bold text-sm transition-all shadow-sm";
+        } else if (idx === index && !isCorrect) {
+            btn.className = "w-full text-left p-3.5 rounded-2xl border-2 border-rose-400 bg-rose-50 text-rose-900 font-medium text-sm transition-all";
+        } else {
+            btn.className = "w-full text-left p-3.5 rounded-2xl border border-slate-200 bg-slate-50 text-slate-400 text-sm opacity-60";
+        }
+    });
+
+    if (feedbackBox) {
+        feedbackBox.classList.remove('hidden');
+        if (isCorrect) {
+            feedbackBox.className = "p-3.5 rounded-2xl text-sm font-semibold bg-emerald-100 text-emerald-900 border border-emerald-200";
+            feedbackBox.innerHTML = `✅ <b>¡Respuesta Correcta!</b> ${ex.grammar_note ? `<br><span class="text-xs font-normal mt-1 block">${escapeHtml(ex.grammar_note)}</span>` : ''}`;
+        } else {
+            feedbackBox.className = "p-3.5 rounded-2xl text-sm font-semibold bg-rose-100 text-rose-900 border border-rose-200";
+            feedbackBox.innerHTML = `❌ <b>No coincide.</b> La respuesta esperada era: <i>${escapeHtml(ex.options[ex.correct_option_index])}</i>${ex.grammar_note ? `<br><span class="text-xs font-normal mt-1 block">${escapeHtml(ex.grammar_note)}</span>` : ''}`;
+        }
+    }
+}
+
+// Evaluación interactiva de Escritura (Writing)
+async function checkWritingAnswer() {
+    const input = document.getElementById('writing-user-input');
+    const feedbackBox = document.getElementById('writing-feedback-box');
+    const checkBtn = document.getElementById('writing-check-btn');
+    const userText = input ? input.value.trim() : '';
+    const ex = exercises[currentIndex];
+    if (!userText || !ex) {
+        alert("Por favor escribe tu respuesta antes de comprobar.");
+        return;
+    }
+
+    checkBtn.disabled = true;
+    checkBtn.textContent = "Evaluando...";
+
+    try {
+        const res = await fetch('/api/evaluate-writing', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user_input: userText,
+                target_text: ex.target_text,
+                prompt: ex.prompt || '',
+                language: currentLanguage,
+                level: ex.level || 'A1'
+            })
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            feedbackBox.classList.remove('hidden');
+            if (data.is_correct) {
+                feedbackBox.className = "p-4 rounded-2xl text-sm bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-1.5";
+                feedbackBox.innerHTML = `
+                    <div class="font-bold text-base flex items-center gap-2">
+                        <span>🎉</span> Puntuación: ${data.score}% - ¡Excelente!
+                    </div>
+                    <p class="leading-relaxed">${escapeHtml(data.pedagogical_feedback)}</p>
+                    ${data.grammar_notes ? `<p class="text-xs text-emerald-800 bg-white/70 p-2.5 rounded-xl border border-emerald-200/50">💡 <b>Nota:</b> ${escapeHtml(data.grammar_notes)}</p>` : ''}
+                `;
+            } else {
+                feedbackBox.className = "p-4 rounded-2xl text-sm bg-amber-50 border border-amber-200 text-amber-950 space-y-1.5";
+                const corrHtml = (data.corrections || []).map(c => `<li>${escapeHtml(c)}</li>`).join('');
+                feedbackBox.innerHTML = `
+                    <div class="font-bold text-base flex items-center gap-2 text-amber-900">
+                        <span>✏️</span> Puntuación: ${data.score}%
+                    </div>
+                    <p class="leading-relaxed">${escapeHtml(data.pedagogical_feedback)}</p>
+                    ${corrHtml ? `<ul class="list-disc ml-5 text-xs font-semibold space-y-0.5">${corrHtml}</ul>` : ''}
+                    ${data.grammar_notes ? `<p class="text-xs text-amber-800 bg-white/70 p-2.5 rounded-xl border border-amber-200/50">💡 <b>Nota:</b> ${escapeHtml(data.grammar_notes)}</p>` : ''}
+                `;
+            }
+        }
+    } catch (e) {
+        console.error("Error evaluando escritura:", e);
+    } finally {
+        checkBtn.disabled = false;
+        checkBtn.textContent = "Comprobar";
+    }
 }
 
 // Siguiente Ejercicio
@@ -230,26 +448,31 @@ function getReferenceText() {
     }
 }
 
-// Reproducir Audio de Referencia (TTS)
-async function playNativeAudio() {
+// Reproducir Audio de Referencia Dual (TTS 1.0x nativo y 0.8x lento)
+async function playNativeAudio(slow = false) {
     const text = getReferenceText();
     if (!text) {
         alert("Por favor introduce una frase para escuchar.");
         return;
     }
 
-    const ttsBtn = document.getElementById('tts-btn');
-    const ttsBtnText = document.getElementById('tts-btn-text');
-    const originalText = ttsBtnText.textContent;
-    ttsBtnText.textContent = "Reproduciendo...";
-    ttsBtn.disabled = true;
+    const ttsBtn = slow ? document.getElementById('tts-slow-btn') : document.getElementById('tts-btn');
+    const ttsBtnText = slow ? document.getElementById('tts-slow-btn-text') : document.getElementById('tts-btn-text');
+    const originalText = ttsBtnText ? ttsBtnText.textContent : "";
+    if (ttsBtnText) ttsBtnText.textContent = "Reproduciendo...";
+    if (ttsBtn) ttsBtn.disabled = true;
+
+    const resetBtns = () => {
+        if (ttsBtnText) ttsBtnText.textContent = originalText;
+        if (ttsBtn) ttsBtn.disabled = false;
+    };
 
     try {
-        // Intentar primero con Azure TTS del backend
+        // Intentar primero con Azure TTS del backend con parámetro de velocidad dual
         const res = await fetch('/api/tts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: text, language: currentLanguage })
+            body: JSON.stringify({ text: text, language: currentLanguage, slow: slow })
         });
 
         if (res.ok) {
@@ -257,35 +480,25 @@ async function playNativeAudio() {
             const audioUrl = URL.createObjectURL(blob);
             const player = document.getElementById('tts-audio-player');
             player.src = audioUrl;
-            player.onended = () => {
-                ttsBtnText.textContent = originalText;
-                ttsBtn.disabled = false;
-            };
+            player.onended = resetBtns;
             player.play();
             return;
         }
     } catch (e) {
-        console.warn("Fallo Azure TTS, usando Web Speech API del navegador...");
+        console.warn("Fallo Azure TTS, usando Web Speech API del navegador...", e);
     }
 
-    // Fallback nativo del navegador (SpeechSynthesis)
+    // Fallback nativo del navegador (SpeechSynthesis) con tasa pausada adaptada
     if ('speechSynthesis' in window) {
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = currentLanguage;
-        utterance.rate = 0.9;
-        utterance.onend = () => {
-            ttsBtnText.textContent = originalText;
-            ttsBtn.disabled = false;
-        };
-        utterance.onerror = () => {
-            ttsBtnText.textContent = originalText;
-            ttsBtn.disabled = false;
-        };
+        utterance.rate = slow ? 0.75 : 1.0;
+        utterance.onend = resetBtns;
+        utterance.onerror = resetBtns;
         window.speechSynthesis.speak(utterance);
     } else {
         alert("Tu navegador no soporta síntesis de voz.");
-        ttsBtnText.textContent = originalText;
-        ttsBtn.disabled = false;
+        resetBtns();
     }
 }
 

@@ -1,3 +1,4 @@
+import asyncio
 import io
 import logging
 import os
@@ -37,141 +38,25 @@ from tut_bot.services.exercises import get_exercises
 from tut_bot.services.final_exam import get_level_exam
 from tut_bot.services.gemini_coach import gemini_coach
 from tut_bot.services.system_monitor import format_system_status, get_system_metrics
+from tut_bot.services.telegram.cards import (
+    build_conversation_mission_card,
+    build_exam_question_card,
+    build_exam_result_card,
+    build_level_completed_card,
+    build_ready_for_exam_card,
+    build_stats_card,
+    build_unit_completed_card,
+)
+from tut_bot.services.telegram.formatters import (
+    _format_markdown_for_telegram,
+    _make_progress_bar,
+    get_phoneme_explanation,
+    get_phoneme_friendly_label,
+)
 from tut_bot.services.tracker import tracker
 
 logger = logging.getLogger(__name__)
 
-
-def _make_progress_bar(score: Optional[float], length: int = 10) -> str:
-    """Genera una barra de progreso visual con caracteres Unicode."""
-    val = float(score) if score is not None else 0.0
-    filled = int(round((val / 100.0) * length))
-    filled = max(0, min(length, filled))
-    return "█" * filled + "░" * (length - filled)
-
-
-def _format_markdown_for_telegram(text: str) -> str:
-    """Convierte markdown (encabezados, **negrita**, *cursiva*) a formato HTML válido para Telegram sin dejar marcas como ##."""
-    if not text:
-        return ""
-    # 1. Escapar entidades HTML especiales
-    text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
-    # 2. Convertir encabezados Markdown (#, ##, ###) a negrita limpia
-    lines = []
-    for line in text.split("\n"):
-        header_match = re.match(r"^\s*#{1,6}\s*(.+)$", line)
-        if header_match:
-            header_content = header_match.group(1).strip()
-            lines.append(f"<b>{header_content}</b>")
-        else:
-            lines.append(line)
-    text = "\n".join(lines)
-
-    # 3. Limpiar cualquier ## o # suelto al inicio o entre texto
-    text = re.sub(r"#{2,}", "", text)
-
-    # 4. Convertir **negrita**
-    parts = text.split("**")
-    if len(parts) > 1:
-        res = []
-        for i, part in enumerate(parts):
-            if i % 2 == 1:
-                res.append(f"<b>{part}</b>")
-            else:
-                res.append(part)
-        text = "".join(res)
-
-    # 5. Convertir *cursiva* si queda
-    parts = text.split("*")
-    if len(parts) > 1:
-        res = []
-        for i, part in enumerate(parts):
-            if i % 2 == 1:
-                res.append(f"<i>{part}</i>")
-            else:
-                res.append(part)
-        text = "".join(res)
-
-    return text.strip()
-
-
-def get_phoneme_explanation(phoneme: str, language: str = "de-DE") -> str:
-    """Traduce símbolos fonéticos IPA a explicaciones comprensibles en español."""
-    clean_p = phoneme.replace("/", "").replace("[", "").replace("]", "").strip()
-    EXPLANATIONS = {
-        # Alemán
-        "ç": "ch suave palatal (siseo suave con lengua en el medio paladar, no es 'j' áspera)",
-        "x": "ch velar (similar a la 'j' española suave)",
-        "ʃ": "sonido 'sh' (como mandar a callar)",
-        "ʁ": "r uvular alemana (vibra en la campanilla)",
-        "ɐ": "r final vocalizada (suena como una 'a' corta relajada, ej. 'Lehrer' -> 'Lee-ra')",
-        "øː": "ö larga (labios en 'o', diciendo 'e')",
-        "œ": "ö corta (labios redondeados)",
-        "yː": "ü larga (labios en beso de 'u', diciendo 'i')",
-        "ʏ": "ü corta y relajada",
-        "ɛː": "ä (e abierta, baja un poco la mandíbula)",
-        "ts": "sonido 'ts' (como tsunami o pizza)",
-        "z": "s sonora (vibra como zumbido de abeja)",
-        "s": "s sorda estándar",
-        # Inglés
-        "θ": "th sorda (como la 'z' española en 'zapato', sin vibrar)",
-        "ð": "th sonora (lengua entre dientes con vibración, ej. 'this', 'father')",
-        "iː": "i larga tensa y sonriente (ej. 'sheep')",
-        "ɪ": "i corta relajada (ej. 'ship')",
-        "æ": "a abierta amplia (entre a y e, mandíbula baja, ej. 'cat')",
-        "ʌ": "u corta central neutra (ej. 'cup')",
-        "w": "w inglesa redondeada sin tocar dientes (ej. 'we')",
-        "v": "v labiodental (dientes superiores sobre labio inferior con vibración)",
-    }
-    return EXPLANATIONS.get(clean_p, "")
-
-
-def get_phoneme_friendly_label(phoneme: str, language: str = "de-DE") -> str:
-    """Devuelve la representación legible con letra común para que el usuario siempre identifique el sonido aunque su móvil no tenga la fuente IPA."""
-    clean_p = phoneme.replace("/", "").replace("[", "").replace("]", "").strip()
-    LABELS = {
-        # Alemán
-        "ʁ": "r gutural",
-        "ɐ": "-er final",
-        "ç": "ch suave",
-        "x": "ch velar",
-        "ʃ": "sh",
-        "øː": "ö larga",
-        "œ": "ö corta",
-        "yː": "ü larga",
-        "ʏ": "ü corta",
-        "ɛː": "ä abierta",
-        "ɛ": "e abierta",
-        "eː": "e larga",
-        "iː": "i larga",
-        "ɪ": "i corta",
-        "oː": "o larga",
-        "ɔ": "o corta",
-        "uː": "u larga",
-        "ʊ": "u corta",
-        "ə": "e relajada",
-        "ts": "z / ts",
-        "z": "s sonora",
-        "s": "s sorda",
-        "aɪ": "ei / ai",
-        "aʊ": "au",
-        "ɔʏ": "eu / äu",
-        # Inglés
-        "θ": "th sorda",
-        "ð": "th sonora",
-        "æ": "a abierta",
-        "ʌ": "u central",
-        "w": "w inglesa",
-        "v": "v labiodental",
-        "dʒ": "j suave",
-        "tʃ": "ch",
-        "ŋ": "ng",
-    }
-    label = LABELS.get(clean_p)
-    if label:
-        return f"'{label}' (/{clean_p}/)"
-    return f"/{clean_p}/"
 
 
 class TelegramCoachBot:
@@ -561,7 +446,7 @@ class TelegramCoachBot:
             return
 
         await update.effective_message.reply_chat_action(ChatAction.TYPING)
-        explanation = gemini_coach.explain_vocabulary(term, lang)
+        explanation = await asyncio.to_thread(gemini_coach.explain_vocabulary, term, lang)
         clean_html = _format_markdown_for_telegram(explanation)
         keyboard = [
             [InlineKeyboardButton("📚 Volver a Ejercicios", callback_data="btn_exercise")],
@@ -629,65 +514,10 @@ class TelegramCoachBot:
         state = tracker.get_user_state(user_id)
         lang = info.get("language") or state["language"]
         level = info.get("level") or state.get("level", "A1")
-        skill = info.get("skill_mode") or state.get("skill_mode", "speaking")
-        next_level = "A2" if level == "A1" else ("B1" if level == "A2" else None)
-
-        unlocked = state.get("unlocked_levels", ["A1"])
         req = tracker.can_take_final_exam(user_id, lang, level)
-
-        lang_name = "🇩🇪 Alemán" if lang.startswith("de") else "🇺🇸 Inglés"
-        skill_names = {
-            "speaking": "🗣️ Hablar",
-            "writing": "✍️ Escribir",
-            "listening": "👂 Comprender",
-        }
-        skill_name = skill_names.get(skill, skill)
-
-        lines = [
-            "🏆 <b>¡SERIE DE EJERCICIOS COMPLETADA!</b> 🏆\n",
-            f"Has completado la serie de <b>{skill_name}</b> en nivel <b>{level}</b> ({lang_name}).",
-            "🎉 <i>Tus ejercicios han sido registrados en tu historial.</i>\n",
-        ]
-
         is_certified = tracker.is_level_certified(user_id, lang, level)
-        keyboard = []
-        if is_certified and next_level in unlocked:
-            lines.append(f"🚀 <b>¡Ya tienes certificado y desbloqueado el Nivel {next_level}!</b>")
-            keyboard.append([
-                InlineKeyboardButton(f"🚀 Ir a Nivel {next_level}", callback_data=f"fsm_ascend_{next_level}")
-            ])
-            keyboard.append([
-                InlineKeyboardButton(f"🔄 Reintentar Evaluación {level}", callback_data=f"exam_start_{level}")
-            ])
-        else:
-            lines.append("🎓 <b>Evaluación Final Oficial:</b>")
-            lines.append(
-                f"Para certificar formalmente tus conocimientos y desbloquear el Nivel {next_level}, rinde la Evaluación Final:"
-            )
-            keyboard.append([
-                InlineKeyboardButton(f"📝 Rendir Evaluación Final {level}", callback_data=f"exam_start_{level}")
-            ])
-            if not req["can_take"]:
-                lines.append(
-                    f"📊 <i>Progreso de Temas: {req['completed_count']} / {req['total_units']} unidades aprobadas.</i>"
-                )
-                keyboard.append([
-                    InlineKeyboardButton("📂 Ver Temas Pendientes", callback_data="btn_units_menu")
-                ])
 
-        keyboard.extend([
-            [
-                InlineKeyboardButton("🔄 Repasar este Nivel", callback_data=f"fsm_review_{level}"),
-                InlineKeyboardButton("🎯 Cambiar Habilidad", callback_data="btn_mode_menu"),
-            ],
-            [
-                InlineKeyboardButton("📊 Mis Estadísticas", callback_data="btn_stats"),
-                InlineKeyboardButton("🏠 Menú Principal", callback_data="btn_start_menu"),
-            ],
-        ])
-
-        msg_text = "\n".join(lines)
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        msg_text, reply_markup = build_level_completed_card(state, info, is_certified, req)
 
         if edit_message and update.callback_query:
             try:
@@ -708,42 +538,10 @@ class TelegramCoachBot:
         state = tracker.get_user_state(user_id)
         lang = info.get("language") or state["language"]
         level = info.get("level") or state.get("level", "A1")
-        next_level = info.get("next_level") or ("A2" if level == "A1" else ("B1" if level == "A2" else None))
-        lang_name = "🇩🇪 Alemán" if lang.startswith("de") else "🇺🇸 Inglés"
-        exam_name = "Goethe Start Deutsch 1" if lang.startswith("de") else "Cambridge A1 Key"
-
+        is_certified = tracker.is_level_certified(user_id, lang, level)
         lvl_lex = info.get("level_lexicon") or tracker.get_user_lexicon_progress(user_id, lang, level)
-        lines = [
-            f"🎓 <b>¡HAS RECORRIDO LAS 6 UNIDADES DE NIVEL {level}!</b> 🎓\n",
-            f"Has practicado las 6 Unidades Temáticas oficiales de <b>{level}</b> ({lang_name}).",
-            f"📖 <b>Vocabulario oficial dominado:</b> <code>{lvl_lex['mastered_count']} / {lvl_lex['total_target']}</code> palabras ({lvl_lex['percentage']:.1f}%).\n",
-            "🛡️ <b>Requisito de Certificación de Nivel:</b>",
-            f"Para certificar tus conocimientos y desbloquear formalmente el <b>Nivel {next_level}</b>, debes aprobar la <b>Evaluación Final Oficial {level}</b> ({exam_name}).\n",
-            "📋 <b>Estructura de la Evaluación:</b>",
-            "• Comprensión Auditiva (Hören) con audio nativo",
-            "• Comprensión de Lectura (Lesen)",
-            "• Estructura y Gramática clave",
-            "• Expresión Escrita (Schreiben)",
-            "• Pronunciación y Fluidez (Sprechen)\n",
-            "Nota mínima de aprobación: <b>75%</b>.",
-        ]
 
-        keyboard = [
-            [
-                InlineKeyboardButton(f"📝 Iniciar Evaluación Final {level}", callback_data=f"exam_start_{level}")
-            ],
-            [
-                InlineKeyboardButton("🔄 Repasar Unidades", callback_data="btn_units_menu"),
-                InlineKeyboardButton("🎯 Cambiar Modo", callback_data="btn_mode_menu"),
-            ],
-            [
-                InlineKeyboardButton("📊 Mis Estadísticas", callback_data="btn_stats"),
-                InlineKeyboardButton("🏠 Menú Principal", callback_data="btn_start_menu"),
-            ],
-        ]
-
-        msg_text = "\n".join(lines)
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        msg_text, reply_markup = build_ready_for_exam_card(state, info, is_certified, lvl_lex)
 
         if edit_message and update.callback_query:
             try:
@@ -816,48 +614,7 @@ class TelegramCoachBot:
         if not q:
             return
 
-        q_idx = exam_session.get("current_index", 0) + 1
-        total_q = exam_session.get("total_questions", 6)
-        level = exam_session.get("level", "A1")
-
-        bar = _make_progress_bar((q_idx / total_q) * 100.0)
-
-        lines = [
-            f"📝 <b>EVALUACIÓN FINAL DE NIVEL {level}</b>",
-            f"<code>[{bar}]</code> Pregunta <b>{q_idx} de {total_q}</b> — <i>{q.section_name_es}</i>\n",
-            f"🎯 <b>Consigna:</b> {q.prompt_es}\n",
-        ]
-
-        if q.context_text:
-            lines.append(f"📖 <b>Texto de Lectura:</b>\n<i>\"{q.context_text}\"</i>\n")
-
-        if q.question_text:
-            lines.append(f"❓ <b>{q.question_text}</b>\n")
-
-        keyboard = []
-
-        if q.audio_text:
-            keyboard.append([
-                InlineKeyboardButton("🔊 Escuchar Audio", callback_data=f"exam_tts_{q.id}"),
-                InlineKeyboardButton("🐢 Escuchar Lento", callback_data=f"exam_ttsslow_{q.id}"),
-            ])
-
-        if q.options:
-            for idx, opt in enumerate(q.options):
-                keyboard.append([
-                    InlineKeyboardButton(f"{chr(65 + idx)}) {opt}", callback_data=f"exam_opt_{idx}")
-                ])
-        elif q.section == "schreiben":
-            lines.append("✍️ <i>Escribe tu respuesta como mensaje de texto a continuación:</i>")
-        elif q.section == "sprechen":
-            lines.append(f"👉 Frase: <b>\"{q.target_answer}\"</b>\n🎙️ <i>Graba y envía una nota de voz pronunciando la frase indicada.</i>")
-
-        keyboard.append([
-            [InlineKeyboardButton("❌ Cancelar Examen", callback_data="exam_cancel")],
-        ])
-
-        msg_text = "\n".join(lines)
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        msg_text, reply_markup = build_exam_question_card(exam_session)
 
         if edit_message and update.callback_query:
             try:
@@ -874,46 +631,7 @@ class TelegramCoachBot:
         result: Dict[str, Any],
         edit_message: bool = False,
     ):
-        is_passed = result.get("is_passed", False)
-        score = result.get("score_percent", 0.0)
-        passing_score = result.get("passing_score", 75.0)
-        level = result.get("level", "A1")
-        next_level = result.get("next_level")
-
-        if is_passed:
-            lines = [
-                f"🎓 <b>¡FELICITACIONES! HAS APROBADO LA EVALUACIÓN FINAL DE NIVEL {level}</b> 🎓\n",
-                f"Puntuación obtenida: <b>{score:.1f}%</b> (Mínimo requerido: {passing_score:.0f}%)\n",
-                "🏆 <b>Certificación Oficial Otorgada</b>",
-                f"Has demostrado un dominio integral de las 6 unidades temáticas oficiales de {level}.\n",
-            ]
-            keyboard = []
-            if next_level:
-                lines.append(f"🚀 <b>¡Nivel {next_level} Desbloqueado con Éxito!</b>")
-                lines.append(f"Ya puedes comenzar el programa curricular de Nivel {next_level}.")
-                keyboard.append([
-                    InlineKeyboardButton(f"🚀 Comenzar Nivel {next_level}", callback_data=f"fsm_ascend_{next_level}")
-                ])
-            keyboard.extend([
-                [InlineKeyboardButton("📊 Ver Mis Estadísticas", callback_data="btn_stats")],
-                [InlineKeyboardButton("🏠 Menú Principal", callback_data="btn_start_menu")],
-            ])
-        else:
-            lines = [
-                f"🟡 <b>RESULTADO DE LA EVALUACIÓN FINAL {level}</b>\n",
-                f"Puntuación obtenida: <b>{score:.1f}%</b> (Mínimo para aprobar: {passing_score:.0f}%)\n",
-                "Estuviste cerca, pero necesitas reforzar algunos conceptos antes de obtener la certificación.\n",
-                "💡 <b>Recomendación Pedagógica:</b>",
-                "Repasa las Unidades Temáticas con /temas y vuelve a intentar la evaluación cuando te sientas listo.",
-            ]
-            keyboard = [
-                [InlineKeyboardButton(f"🔄 Reintentar Examen {level}", callback_data=f"exam_start_{level}")],
-                [InlineKeyboardButton("📂 Repasar Unidades Temáticas", callback_data="btn_units_menu")],
-                [InlineKeyboardButton("📚 Ir a Ejercicios", callback_data="btn_exercise")],
-            ]
-
-        msg_text = "\n".join(lines)
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        msg_text, reply_markup = build_exam_result_card(result)
 
         if edit_message and update.callback_query:
             try:
@@ -936,52 +654,14 @@ class TelegramCoachBot:
         level = info.get("level") or state.get("level", "A1")
         completed_unit = info.get("completed_unit", "unit_1")
         next_unit = info.get("next_unit")
-        units_done = info.get("units_completed_count", 1)
-        total_units = info.get("total_units", 6)
 
         u_info = get_unit_by_id(completed_unit, lang, level)
-        u_title = f"{u_info.icon} {u_info.title_es}" if u_info else completed_unit
-
         next_u_info = get_unit_by_id(next_unit, lang, level) if next_unit else None
-        next_title = f"{next_u_info.icon} {next_u_info.title_es}" if next_u_info else next_unit
-
-        bar = _make_progress_bar((units_done / total_units) * 100.0)
-
         u_lex = info.get("unit_lexicon") or tracker.get_unit_lexicon_progress(user_id, lang, level, completed_unit)
         lvl_lex = info.get("level_lexicon") or tracker.get_user_lexicon_progress(user_id, lang, level)
 
-        lines = [
-            "🎉 <b>¡SERIE DE EJERCICIOS COMPLETADA!</b> 🎉\n",
-            f"Has completado la ronda de práctica de: <b>{u_title}</b>.",
-            f"📖 <b>Vocabulario aprendido en esta unidad:</b> <code>{u_lex['mastered_count']} / {u_lex['total_target']}</code> palabras ({u_lex['percentage']:.0f}%)\n",
-            f"📊 <b>Progreso léxico en Nivel {level}:</b> <code>{lvl_lex['mastered_count']} / {lvl_lex['total_target']}</code> palabras ({lvl_lex['percentage']:.1f}%)\n",
-            f"🗺️ <b>Progreso de Unidades en Nivel {level}:</b>\n",
-            f"• <code>[{bar}]</code> <b>{units_done} / {total_units}</b> unidades recorridas ({int((units_done / total_units) * 100)}%)\n",
-        ]
+        msg_text, reply_markup = build_unit_completed_card(state, info, u_info, next_u_info, u_lex, lvl_lex)
 
-        keyboard = []
-        if next_unit:
-            lines.append(f"👉 <b>Siguiente Unidad:</b> {next_title}")
-            lines.append("<i>Para graduarte de A1 debes completar las 6 unidades temáticas oficiales.</i>")
-            keyboard.append([
-                InlineKeyboardButton(f"➡️ Pasar a: {next_title}", callback_data=f"fsm_next_unit_{next_unit}")
-            ])
-        else:
-            lines.append("🌟 <b>¡Has cubierto todas las unidades de este nivel!</b>")
-
-        keyboard.extend([
-            [
-                InlineKeyboardButton("🔄 Repasar esta Unidad", callback_data=f"unit_sel_{completed_unit}"),
-                InlineKeyboardButton("📂 Ver Todas las Unidades", callback_data="btn_units_menu"),
-            ],
-            [
-                InlineKeyboardButton("🎯 Cambiar Modo (Escribir/Escuchar)", callback_data="btn_mode_menu"),
-                InlineKeyboardButton("📊 Mis Estadísticas", callback_data="btn_stats"),
-            ],
-        ])
-
-        msg_text = "\n".join(lines)
-        reply_markup = InlineKeyboardMarkup(keyboard)
         if edit_message and update.callback_query:
             try:
                 await self._safe_edit_text(update.callback_query, msg_text, reply_markup=reply_markup)
@@ -1047,81 +727,8 @@ class TelegramCoachBot:
                 suggested_replies=scen.target_phrases[:3],
             )
 
-        turns = active_conv.get("turns", [])
-        last_turn = (
-            turns[-1]
-            if turns
-            else {
-                "name": scen.character_name,
-                "text": scen.initial_greeting,
-                "text_es": scen.initial_greeting_es,
-            }
-        )
-
-        # Frases de apoyo sugeridas
-        hints = [f"• <i>{p}</i>" for p in scen.target_phrases[:3]]
-        hints_str = "\n".join(hints)
-
-        char_avatar = getattr(scen, "avatar_emoji", "👤")
-        char_traits = getattr(scen, "personality_traits", "")
-        traits_block = f"✨ <b>Personalidad:</b> <i>{char_traits}</i>\n" if char_traits else ""
-
-        # Diálogo reciente (últimos 4 turnos)
-        dialogue_preview = []
-        for t in turns[-4:]:
-            icon = char_avatar if t.get("role") == "character" else "🎓"
-            dialogue_preview.append(f"{icon} <b>{t.get('name')}:</b> {t.get('text')}")
-        dialogue_text = "\n".join(dialogue_preview)
-
-        spoiler_es = (
-            f"<tg-spoiler><i>🇪🇸 {last_turn.get('text_es', '')}</i></tg-spoiler>"
-            if last_turn.get("text_es")
-            else ""
-        )
-
-        lang_badge = "🇩🇪 ALEMÁN" if lang.startswith("de") else "🇺🇸 INGLÉS"
         u_info = get_unit_by_id(scen.unit_id, lang, level)
-        u_badge = f" · {u_info.icon} U{u_info.number}" if u_info else ""
-
-        card = (
-            f"🎭 <b>{lang_badge} [{level}{u_badge}] — Misión de Conversación</b>\n"
-            f"<b>Escenario:</b> {scen.title}\n"
-            f"{char_avatar} <b>Interlocutor:</b> <b>{scen.character_name}</b> (<i>{scen.character_role}</i>)\n"
-            f"{traits_block}"
-            f"🎯 <b>Tu Misión:</b> {scen.mission_brief}\n\n"
-            f"💡 <b>Frases de apoyo sugeridas:</b>\n{hints_str}\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"💬 <b>Diálogo en curso:</b>\n"
-            f"{dialogue_text}\n"
-            f"{spoiler_es}\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"🎙️ Envía una <b>nota de voz</b> o responde por <b>texto</b> para continuar."
-        )
-
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    "🔊 Escuchar al Personaje", callback_data=f"conv_tts_{scen.id}"
-                ),
-                InlineKeyboardButton(
-                    "🐢 Escuchar Lento", callback_data=f"conv_tts_slow_{scen.id}"
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    "💡 ¿Qué puedo responder?", callback_data="conv_hint_0"
-                ),
-            ],
-            [
-                InlineKeyboardButton("🏁 Finalizar Misión", callback_data="conv_finish"),
-                InlineKeyboardButton("🔄 Reiniciar Misión", callback_data="conv_restart"),
-            ],
-            [
-                InlineKeyboardButton("📂 Cambiar Unidad", callback_data="btn_units_menu"),
-                InlineKeyboardButton("🎯 Cambiar Modo", callback_data="btn_mode_menu"),
-            ],
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        card, reply_markup = build_conversation_mission_card(scen, active_conv, lang, level, u_info)
 
         if edit_message and update.callback_query:
             try:
@@ -1175,7 +782,8 @@ class TelegramCoachBot:
         active_conv = tracker.get_active_conversation(user_id)
         dialogue_history = active_conv.get("turns", [])
 
-        reply_data = gemini_coach.generate_conversation_reply(
+        reply_data = await asyncio.to_thread(
+            gemini_coach.generate_conversation_reply,
             scenario_title=scen.title,
             character_name=scen.character_name,
             character_role=scen.character_role,
@@ -1319,7 +927,8 @@ class TelegramCoachBot:
         tracker.complete_conversation(user_id)
 
         await update.effective_message.reply_chat_action(ChatAction.TYPING)
-        debrief = gemini_coach.generate_conversation_debrief(
+        debrief = await asyncio.to_thread(
+            gemini_coach.generate_conversation_debrief,
             scenario_title=scen.title,
             character_name=scen.character_name,
             mission_brief=scen.mission_brief,
@@ -1409,14 +1018,18 @@ class TelegramCoachBot:
         voice_name = getattr(scen, "azure_voice_name", None) if scen else None
         avatar = getattr(scen, "avatar_emoji", "👤") if scen else "👤"
 
-        wav_bytes = azure_service.text_to_speech(
-            text=text_to_speak, language=lang, slow=slow, voice_name=voice_name
+        wav_bytes = await asyncio.to_thread(
+            azure_service.text_to_speech,
+            text=text_to_speak,
+            language=lang,
+            slow=slow,
+            voice_name=voice_name,
         )
         if not wav_bytes:
             await query.message.reply_text("⚠️ No se pudo generar el audio nativo de referencia.")
             return
 
-        ogg_bytes = audio_converter.wav_to_ogg_opus(wav_bytes)
+        ogg_bytes = await asyncio.to_thread(audio_converter.wav_to_ogg_opus, wav_bytes)
         audio_stream = io.BytesIO(ogg_bytes if ogg_bytes else wav_bytes)
         audio_stream.name = "dialogo_lento.ogg" if slow else "dialogo_nativo.ogg"
 
@@ -1660,67 +1273,9 @@ class TelegramCoachBot:
         user_state = tracker.get_user_state(user_id)
         lang = user_state["language"]
         level = user_state.get("level", "A1")
-        exam_name = (
-            "Goethe Start Deutsch 1"
-            if lang.startswith("de")
-            else "Cambridge A1 Key"
-        )
-
         lex_prog = tracker.get_user_lexicon_progress(user_id, lang, level)
-        mastered_cnt = lex_prog["mastered_count"]
-        total_target = lex_prog["total_target"]
-        lex_percent = lex_prog["percentage"]
-        lex_bar = _make_progress_bar(lex_percent)
 
-        completed_ex_cnt = len(user_state.get("completed_exercises", []))
-        lex_section = (
-            f"📚 <b>Inventario Léxico Oficial {level} ({exam_name}):</b>\n"
-            f"• <code>[{lex_bar}]</code> <b>{mastered_cnt} / {total_target}</b> palabras dominadas ({lex_percent:.1f}%)\n"
-            f"• <b>Ejercicios completados:</b> {completed_ex_cnt}\n"
-            f"💡 <i>(La meta de suficiencia oficial {level} es de {total_target} palabras. Practica las 6 unidades con /temas para seguir sumando palabras)</i>\n\n"
-        )
-
-        if stats["total_attempts"] == 0:
-            text = (
-                f"📊 <b>Tus Estadísticas en tut_bot</b>\n\n"
-                f"{lex_section}"
-                "🗣️ <i>Aún no has realizado prácticas de fonética con notas de voz.</i>\n"
-                "¡Usa /ejercicio y envía tu primer audio para comenzar tu registro acústico!"
-            )
-        else:
-            avg_acc = stats["average_accuracy"]
-            avg_flu = stats["average_fluency"]
-            acc_bar = _make_progress_bar(avg_acc)
-            flu_bar = _make_progress_bar(avg_flu)
-
-            weak = stats.get("weak_phonemes", [])
-            weak_str = (
-                ", ".join([f"<code>/{p}/</code>" for p in weak[:5]])
-                if weak
-                else "¡Ninguno! Estás pronunciando excelente."
-            )
-
-            text = (
-                f"📊 <b>Tus Estadísticas en tut_bot</b>\n\n"
-                f"{lex_section}"
-                "🗣️ <b>Pronunciación y Fluidez:</b>\n"
-                f"• <b>Intentos totales:</b> {stats['total_attempts']}\n"
-                f"• <b>Precisión Media:</b> <code>[{acc_bar}]</code> {avg_acc:.0f}%\n"
-                f"• <b>Fluidez Media:</b>   <code>[{flu_bar}]</code> {avg_flu:.0f}%\n\n"
-                f"🎯 <b>Sonidos que más debes practicar:</b>\n{weak_str}"
-            )
-
-        keyboard = [
-            [
-                InlineKeyboardButton("📚 Ir a Ejercicios", callback_data="btn_exercise"),
-                InlineKeyboardButton("📂 Unidades Temáticas", callback_data="btn_units_menu"),
-            ],
-            [
-                InlineKeyboardButton("🎯 Modo y Nivel", callback_data="btn_mode_menu"),
-                InlineKeyboardButton("🏠 Menú Principal", callback_data="btn_start_menu"),
-            ],
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        text, reply_markup = build_stats_card(stats, user_state, lex_prog)
 
         if edit_message and update.callback_query:
             try:
@@ -1745,10 +1300,10 @@ class TelegramCoachBot:
 
     async def cmd_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Muestra el estado operativo de los servicios y telemetría de hardware de la Jetson Nano."""
-        metrics = get_system_metrics()
+        metrics = await asyncio.to_thread(get_system_metrics)
         msg = format_system_status(
-            azure_ok=self.azure_service.is_available(),
-            gemini_ok=self.gemini_coach.is_available(),
+            azure_ok=azure_service.is_available(),
+            gemini_ok=gemini_coach.is_available(),
             telegram_ok=True,
             mock_mode=settings.is_mock_mode,
             metrics=metrics,
@@ -1785,10 +1340,10 @@ class TelegramCoachBot:
             await self._send_stats(update, user_id, edit_message=True)
 
         elif data == "btn_sys_status":
-            metrics = get_system_metrics()
+            metrics = await asyncio.to_thread(get_system_metrics)
             msg = format_system_status(
-                azure_ok=self.azure_service.is_available(),
-                gemini_ok=self.gemini_coach.is_available(),
+                azure_ok=azure_service.is_available(),
+                gemini_ok=gemini_coach.is_available(),
                 telegram_ok=True,
                 mock_mode=settings.is_mock_mode,
                 metrics=metrics,
@@ -2032,9 +1587,14 @@ class TelegramCoachBot:
                 exam_obj = get_level_exam(active_exam["language"], active_exam["level"])
                 q = next((item for item in exam_obj.questions if item.id == raw_id), None) if exam_obj else None
                 if q and q.audio_text:
-                    wav_bytes = azure_service.text_to_speech(text=q.audio_text, language=active_exam["language"], slow=slow)
+                    wav_bytes = await asyncio.to_thread(
+                        azure_service.text_to_speech,
+                        text=q.audio_text,
+                        language=active_exam["language"],
+                        slow=slow,
+                    )
                     if wav_bytes:
-                        ogg_bytes = audio_converter.wav_to_ogg_opus(wav_bytes)
+                        ogg_bytes = await asyncio.to_thread(audio_converter.wav_to_ogg_opus, wav_bytes)
                         stream = io.BytesIO(ogg_bytes if ogg_bytes else wav_bytes)
                         stream.name = "audio_examen.ogg"
                         await query.message.reply_voice(
@@ -2093,7 +1653,9 @@ class TelegramCoachBot:
                     lines.append(f"\n💡 <b>Gramática:</b> <i>{ex.grammar_note}</i>")
                 vocab_msg = "\n".join(lines)
             else:
-                raw_exp = gemini_coach.explain_vocabulary(ex.target_text, state["language"])
+                raw_exp = await asyncio.to_thread(
+                    gemini_coach.explain_vocabulary, ex.target_text, state["language"]
+                )
                 vocab_msg = _format_markdown_for_telegram(raw_exp)
 
             keyboard = [
@@ -2310,12 +1872,14 @@ class TelegramCoachBot:
                 idx = state["exercise_index"] % len(exercises)
                 text = exercises[idx].target_text
 
-        wav_bytes = azure_service.text_to_speech(text=text, language=lang, slow=slow)
+        wav_bytes = await asyncio.to_thread(
+            azure_service.text_to_speech, text=text, language=lang, slow=slow
+        )
         if not wav_bytes:
             await query.message.reply_text("⚠️ No se pudo generar el audio nativo de referencia.")
             return
 
-        ogg_bytes = audio_converter.wav_to_ogg_opus(wav_bytes)
+        ogg_bytes = await asyncio.to_thread(audio_converter.wav_to_ogg_opus, wav_bytes)
         audio_stream = io.BytesIO(ogg_bytes if ogg_bytes else wav_bytes)
         audio_stream.name = "referencia_lenta.ogg" if slow else "referencia_nativa.ogg"
 
@@ -2381,7 +1945,7 @@ class TelegramCoachBot:
                 return
 
             await update.effective_message.reply_chat_action(ChatAction.TYPING)
-            explanation = gemini_coach.explain_vocabulary(clean_term, lang)
+            explanation = await asyncio.to_thread(gemini_coach.explain_vocabulary, clean_term, lang)
             clean_html = _format_markdown_for_telegram(explanation)
             keyboard = [
                 [InlineKeyboardButton("📚 Volver a Ejercicios", callback_data="btn_exercise")],
@@ -2408,7 +1972,8 @@ class TelegramCoachBot:
                     q = exam_obj.questions[curr_q_idx]
                     if q.section == "schreiben":
                         await update.effective_message.reply_chat_action(ChatAction.TYPING)
-                        eval_res = gemini_coach.evaluate_writing(
+                        eval_res = await asyncio.to_thread(
+                            gemini_coach.evaluate_writing,
                             user_input=text,
                             target_text=q.target_answer or "",
                             prompt=q.prompt_es,
@@ -2464,7 +2029,8 @@ class TelegramCoachBot:
             ex = exercises[idx]
 
             await update.effective_message.reply_chat_action(ChatAction.TYPING)
-            eval_res = gemini_coach.evaluate_writing(
+            eval_res = await asyncio.to_thread(
+                gemini_coach.evaluate_writing,
                 user_input=text,
                 target_text=ex.target_text,
                 prompt=ex.prompt or ex.title,
@@ -2632,7 +2198,8 @@ class TelegramCoachBot:
 
             # Si no fue opción directa, evaluar con IA pasando las opciones
             await update.effective_message.reply_chat_action(ChatAction.TYPING)
-            comp_res = gemini_coach.evaluate_comprehension(
+            comp_res = await asyncio.to_thread(
+                gemini_coach.evaluate_comprehension,
                 user_answer=text,
                 audio_transcript=ex.target_text,
                 question=ex.prompt or ex.title,
@@ -2705,9 +2272,15 @@ class TelegramCoachBot:
                 voice_obj = update.message.voice or update.message.audio
                 if not voice_obj:
                     return
+                if getattr(voice_obj, "file_size", None) and voice_obj.file_size > 5 * 1024 * 1024:
+                    await self._safe_edit_text(
+                        status_msg,
+                        "⚠️ El audio supera el límite de 5 MB. Envía una nota de voz breve (máx. 30-60 segundos).",
+                    )
+                    return
                 voice_file = await voice_obj.get_file()
                 ogg_bytes = await voice_file.download_as_bytearray()
-                wav_bytes = audio_converter.ogg_to_wav(bytes(ogg_bytes))
+                wav_bytes = await asyncio.to_thread(audio_converter.ogg_to_wav, bytes(ogg_bytes))
                 if not wav_bytes:
                     await self._safe_edit_text(
                         status_msg,
@@ -2719,7 +2292,9 @@ class TelegramCoachBot:
                     f.write(wav_bytes)
                     temp_wav_path = f.name
 
-                transcription = azure_service.transcribe_speech(temp_wav_path, language=lang)
+                transcription = await asyncio.to_thread(
+                    azure_service.transcribe_speech, temp_wav_path, language=lang
+                )
                 if not transcription:
                     transcription = "Hallo" if lang.startswith("de") else "Hello"
 
@@ -2763,15 +2338,24 @@ class TelegramCoachBot:
                             voice_obj = update.message.voice or update.message.audio
                             if not voice_obj:
                                 return
+                            if getattr(voice_obj, "file_size", None) and voice_obj.file_size > 5 * 1024 * 1024:
+                                await self._safe_edit_text(
+                                    status_msg,
+                                    "⚠️ El audio supera el límite de 5 MB. Envía una nota de voz breve.",
+                                )
+                                return
                             voice_file = await voice_obj.get_file()
                             ogg_bytes = await voice_file.download_as_bytearray()
-                            wav_bytes = audio_converter.ogg_to_wav(bytes(ogg_bytes))
+                            wav_bytes = await asyncio.to_thread(audio_converter.ogg_to_wav, bytes(ogg_bytes))
                             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
                                 f.write(wav_bytes)
                                 temp_wav_path = f.name
 
-                            eval_res = azure_service.evaluate_pronunciation(
-                                temp_wav_path, q.target_answer or "", active_exam["language"]
+                            eval_res = await asyncio.to_thread(
+                                azure_service.evaluate_pronunciation,
+                                temp_wav_path,
+                                q.target_answer or "",
+                                active_exam["language"],
                             )
                             score_val = eval_res.overall_score
                             is_correct = score_val >= 65.0
@@ -2845,11 +2429,17 @@ class TelegramCoachBot:
             voice_obj = update.message.voice or update.message.audio
             if not voice_obj:
                 return
+            if getattr(voice_obj, "file_size", None) and voice_obj.file_size > 5 * 1024 * 1024:
+                await self._safe_edit_text(
+                    status_msg,
+                    "⚠️ El audio supera el límite de 5 MB. Envía una nota de voz breve de 5 a 30 segundos.",
+                )
+                return
             voice_file = await voice_obj.get_file()
             ogg_bytes = await voice_file.download_as_bytearray()
 
             # 2. Convertir a WAV PCM 16kHz mono para Azure Speech SDK
-            wav_bytes = audio_converter.ogg_to_wav(bytes(ogg_bytes))
+            wav_bytes = await asyncio.to_thread(audio_converter.ogg_to_wav, bytes(ogg_bytes))
             if not wav_bytes:
                 await self._safe_edit_text(
                     status_msg,
@@ -2861,15 +2451,17 @@ class TelegramCoachBot:
                 f.write(wav_bytes)
                 temp_wav_path = f.name
 
-            # 3. Evaluación Acústica (Azure Speech o Mock)
-            eval_result = azure_service.assess_pronunciation(
+            # 3. Evaluación Acústica (Azure Speech o Mock) desacoplada en hilo
+            eval_result = await asyncio.to_thread(
+                azure_service.assess_pronunciation,
                 audio_wav_path=temp_wav_path,
                 reference_text=reference_text,
                 language=lang,
             )
 
-            # 4. Feedback Conciso de Gemini Coach
-            feedback = gemini_coach.generate_feedback(
+            # 4. Feedback Conciso de Gemini Coach desacoplado en hilo
+            feedback = await asyncio.to_thread(
+                gemini_coach.generate_feedback,
                 reference_text=reference_text,
                 language=lang,
                 overall_score=eval_result.overall_score,

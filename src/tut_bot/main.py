@@ -12,7 +12,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from tut_bot.config import settings
-from tut_bot.models.schemas import EvaluationResponse, HealthStatus, TTSRequest
+from tut_bot.models.schemas import (
+    EvaluationResponse,
+    HealthStatus,
+    TTSRequest,
+    WritingEvaluationRequest,
+    WritingEvaluationResponse,
+)
 from tut_bot.services.azure_speech import azure_service
 from tut_bot.services.exercises import get_categories, get_exercises
 from tut_bot.services.gemini_coach import gemini_coach
@@ -95,7 +101,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -157,22 +163,30 @@ async def evaluate_audio(
     if not reference_text.strip():
         raise HTTPException(status_code=400, detail="El texto de referencia no puede estar vacío.")
 
+    content = await audio.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(
+            status_code=400,
+            detail="El archivo de audio supera el límite máximo permitido (5 MB).",
+        )
+
     suffix = ".wav"
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
         temp_path = temp_file.name
-        content = await audio.read()
         temp_file.write(content)
 
     try:
-        # 1. Evaluación acústica (Azure Speech SDK o simulación)
-        eval_result = azure_service.evaluate_pronunciation(
+        # 1. Evaluación acústica (Azure Speech SDK o simulación) desacoplada en hilo secundario
+        eval_result = await asyncio.to_thread(
+            azure_service.evaluate_pronunciation,
             wav_path=temp_path,
             reference_text=reference_text.strip(),
             language=language,
         )
 
-        # 2. Orquestador pedagógico (Gemini AI Studio)
-        pedagogical_feedback = gemini_coach.generate_feedback(
+        # 2. Orquestador pedagógico (Gemini AI Studio) desacoplado en hilo secundario
+        pedagogical_feedback = await asyncio.to_thread(
+            gemini_coach.generate_feedback,
             reference_text=reference_text.strip(),
             language=language,
             overall_score=eval_result.overall_score,
@@ -214,10 +228,33 @@ async def evaluate_audio(
 @app.post("/api/tts")
 async def text_to_speech(payload: TTSRequest):
     """Genera audio nativo de referencia para que el usuario escuche cómo debe sonar."""
-    audio_bytes = azure_service.synthesize_speech(payload.text, payload.language)
+    audio_bytes = await asyncio.to_thread(
+        azure_service.synthesize_speech,
+        payload.text,
+        payload.language,
+        slow=payload.slow,
+        voice_name=payload.voice,
+    )
     if not audio_bytes:
         raise HTTPException(status_code=503, detail="TTS no disponible o Azure no configurado.")
     return Response(content=audio_bytes, media_type="audio/wav")
+
+
+@app.post("/api/evaluate-writing", response_model=WritingEvaluationResponse)
+async def evaluate_writing(payload: WritingEvaluationRequest):
+    """Evalúa una respuesta escrita con Google Gemini AI."""
+    if not payload.user_input.strip():
+        raise HTTPException(status_code=400, detail="El texto escrito no puede estar vacío.")
+
+    result = await asyncio.to_thread(
+        gemini_coach.evaluate_writing,
+        user_input=payload.user_input,
+        target_text=payload.target_text,
+        prompt=payload.prompt,
+        language=payload.language,
+        level=payload.level,
+    )
+    return result
 
 
 # Servir interfaz web estática

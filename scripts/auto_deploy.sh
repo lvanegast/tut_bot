@@ -23,7 +23,6 @@ while true; do
         # Detectar si cambiaron archivos de infraestructura/dependencias que requieran rebuild
         BUILD_FILES_CHANGED=$(git diff --name-only "$LOCAL_HASH" "$REMOTE_HASH" 2>/dev/null | grep -E '^(Dockerfile|docker-compose\.yml|pyproject\.toml|uv\.lock)' || true)
 
-        git pull origin "$BRANCH"
 
         if [ -n "$BUILD_FILES_CHANGED" ]; then
             echo "[$(date)] 📦 Cambios en dependencias detectados ($BUILD_FILES_CHANGED). Reconstruyendo con baja prioridad (nice)..."

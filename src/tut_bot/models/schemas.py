@@ -82,7 +82,17 @@ class VocabularyExplanation(BaseModel):
 class TTSRequest(BaseModel):
     text: str
     language: str = "de-DE"
+    slow: bool = False
     voice: Optional[str] = None
+
+
+class WritingEvaluationRequest(BaseModel):
+    user_input: str
+    target_text: str
+    prompt: str = ""
+    language: str = "de-DE"
+    level: str = "A1"
+    user_id: str = "web_default"
 
 
 class SystemMetrics(BaseModel):
