@@ -417,7 +417,10 @@ def build_conversation_mission_card(
             InlineKeyboardButton("🔄 Reiniciar Misión", callback_data="conv_restart"),
         ],
         [
-            InlineKeyboardButton("📂 Cambiar Unidad", callback_data="btn_units_menu"),
+            InlineKeyboardButton("🎭 Cambiar Personaje", callback_data="conv_change_char"),
+            InlineKeyboardButton("📂 Unidades", callback_data="btn_units_menu"),
+        ],
+        [
             InlineKeyboardButton("🎯 Cambiar Modo", callback_data="btn_mode_menu"),
         ],
     ]

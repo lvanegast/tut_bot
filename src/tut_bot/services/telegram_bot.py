@@ -158,6 +158,12 @@ class TelegramCoachBot:
                 self.cmd_conversation,
             )
         )
+        app.add_handler(
+            CommandHandler(
+                ["personajes", "roles", "interlocutor", "personaje", "rol", "buddy"],
+                self.cmd_characters,
+            )
+        )
         app.add_handler(CommandHandler(["palabra", "vocabulario", "definir"], self.cmd_vocab))
         app.add_handler(
             CommandHandler(
@@ -296,6 +302,7 @@ class TelegramCoachBot:
             "📖 <b>Comandos disponibles en tut_bot:</b>\n\n"
             "• <b>/ejercicio</b> — Muestra el ejercicio activo según tu modo y nivel.\n"
             "• <b>/conversar</b> — Inicia una misión de diálogo conversacional (roleplay con IA).\n"
+            "• <b>/personajes</b> — Elige tu interlocutor de conversación o compañero de charla libre.\n"
             "• <b>/modo</b> — Cambia entre 🗣️ Hablar, ✍️ Escribir, 👂 Comprender y 💬 Conversar.\n"
             "• <b>/tema</b> — Selecciona una de las 6 Unidades Temáticas oficiales (~650 palabras).\n"
             "• <b>/nivel</b> — Elige tu nivel MCER (A1, A2, B1).\n"
@@ -418,9 +425,24 @@ class TelegramCoachBot:
                 )
             ]
         )
+        free_scen_id = "scen_de_free" if lang.startswith("de") else "scen_en_free"
+        companion_name = "Max" if lang.startswith("de") else "Alex"
         buttons.append(
             [
+                InlineKeyboardButton(
+                    f"🤝 Charla Libre con {companion_name} (Tandem Partner)",
+                    callback_data=f"conv_sel_{free_scen_id}",
+                )
+            ]
+        )
+        buttons.append(
+            [
+                InlineKeyboardButton("🎭 Ver Personajes", callback_data="conv_change_char"),
                 InlineKeyboardButton("📚 Ir al Ejercicio", callback_data="btn_exercise"),
+            ]
+        )
+        buttons.append(
+            [
                 InlineKeyboardButton("🎯 Modo y Nivel", callback_data="btn_mode_menu"),
             ]
         )
@@ -693,6 +715,39 @@ class TelegramCoachBot:
         tracker.set_user_skill_mode(user_id, "conversation")
         await self._send_conversation_mission_card(update, user_id)
 
+    async def cmd_characters(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Muestra el catálogo de personajes/roles disponibles para conversar."""
+        user_id = f"tg_{update.effective_user.id}"
+        state = tracker.get_user_state(user_id)
+        lang = state["language"]
+        level = state.get("level", "A1")
+        scenarios = get_curriculum_scenarios(lang, level)
+        active_conv = tracker.get_active_conversation(user_id)
+        curr_scen_id = active_conv.get("scenario_id") if active_conv else None
+
+        lang_name = "🇩🇪 Alemán" if lang.startswith("de") else "🇺🇸 Inglés"
+        msg = (
+            f"🎭 <b>Interlocutores y Roles — {lang_name} [{level}]</b>\n\n"
+            f"<i>Elige con quién deseas charlar. Cada personaje tiene su propia personalidad, objetivos y voz neuronal:</i>"
+        )
+
+        buttons = []
+        for s in scenarios:
+            prefix = "🔘 " if curr_scen_id == s.id else ""
+            char_avatar = getattr(s, "avatar_emoji", "👤")
+            btn_text = f"{prefix}{char_avatar} {s.character_name} — {s.title}"
+            buttons.append([InlineKeyboardButton(btn_text, callback_data=f"conv_sel_{s.id}")])
+
+        buttons.append([
+            InlineKeyboardButton("💬 Volver a la Conversación", callback_data="conv_show_current"),
+            InlineKeyboardButton("🎯 Cambiar Modo", callback_data="btn_mode_menu"),
+        ])
+
+        if update.callback_query:
+            await self._safe_edit_text(update.callback_query, msg, reply_markup=InlineKeyboardMarkup(buttons))
+        else:
+            await self._safe_reply_text(update.effective_message, msg, reply_markup=InlineKeyboardMarkup(buttons))
+
     async def _send_conversation_mission_card(
         self,
         update: Update,
@@ -705,13 +760,18 @@ class TelegramCoachBot:
         level = state.get("level", "A1")
         active_unit = state.get("active_unit", "all")
 
-        scenarios = get_scenarios_for_unit(active_unit, lang, level)
-        if not scenarios:
-            scenarios = get_curriculum_scenarios(lang, level)
-        scen = scenarios[0]
-
-        # Verificar si ya hay una conversación activa para este usuario
+        # Verificar si ya hay una conversación activa para este usuario y rescatar su escenario
         active_conv = tracker.get_active_conversation(user_id)
+        scen = None
+        if active_conv and active_conv.get("scenario_id"):
+            scen = get_scenario_by_id(active_conv["scenario_id"], lang, level)
+
+        if not scen:
+            scenarios = get_scenarios_for_unit(active_unit, lang, level)
+            if not scenarios:
+                scenarios = get_curriculum_scenarios(lang, level)
+            scen = scenarios[0]
+
         if not active_conv or active_conv.get("scenario_id") != scen.id:
             active_conv = tracker.start_conversation(
                 user_id=user_id,
@@ -862,6 +922,7 @@ class TelegramCoachBot:
             ])
 
         keyboard.append([
+            InlineKeyboardButton("🎭 Cambiar Personaje", callback_data="conv_change_char"),
             InlineKeyboardButton("🎯 Cambiar Modo", callback_data="btn_mode_menu"),
         ])
 
@@ -1436,6 +1497,39 @@ class TelegramCoachBot:
             tracker.cancel_conversation(user_id)
             await self._safe_edit_text(query, "🔄 <b>Reiniciando misión conversacional...</b>")
             await self._send_conversation_mission_card(update, user_id, edit_message=False)
+
+        elif data == "conv_change_char":
+            await self.cmd_characters(update, context)
+
+        elif data.startswith("conv_sel_"):
+            scen_id = data.replace("conv_sel_", "")
+            state = tracker.get_user_state(user_id)
+            scen = get_scenario_by_id(scen_id, state["language"], state.get("level", "A1"))
+            if scen:
+                tracker.cancel_conversation(user_id)
+                tracker.set_user_skill_mode(user_id, "conversation")
+                tracker.set_fsm_state(user_id, "IN_CONVERSATION")
+                if scen.unit_id and scen.unit_id != "unit_free":
+                    tracker.set_user_unit(user_id, scen.unit_id)
+                tracker.start_conversation(
+                    user_id=user_id,
+                    language=state["language"],
+                    level=state.get("level", "A1"),
+                    unit_id=scen.unit_id,
+                    scenario_id=scen.id,
+                    scenario_title=scen.title,
+                    mission_brief=scen.mission_brief,
+                    character_name=scen.character_name,
+                    initial_greeting=scen.initial_greeting,
+                    initial_greeting_es=scen.initial_greeting_es,
+                    suggested_replies=scen.target_phrases[:3],
+                )
+                await self._send_conversation_mission_card(update, user_id, edit_message=True)
+            else:
+                await query.answer("⚠️ No se encontró el personaje seleccionado.", show_alert=True)
+
+        elif data == "conv_show_current":
+            await self._send_conversation_mission_card(update, user_id, edit_message=True)
 
         elif data == "conv_next_scenario":
             tracker.cancel_conversation(user_id)

@@ -433,7 +433,8 @@ def test_conversation_roleplay_service():
 
     # 1. Recuperar escenario de la unidad 2 (Panadería / Cafetería)
     all_scens = get_curriculum_scenarios("de-DE", "A1")
-    assert len(all_scens) == 6
+    assert len(all_scens) >= 6
+    assert get_scenario_by_id("scen_de_free", "de-DE", "A1") is not None
 
     scenarios = get_scenarios_for_unit("unit_2", "de-DE", "A1")
     assert len(scenarios) > 0

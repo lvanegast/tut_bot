@@ -477,6 +477,12 @@ class GeminiCoachService:
                 ("Hier sind Tabletten gegen die Schmerzen. Nehmen Sie eine mit Wasser.", "Aquí tiene pastillas para el dolor. Tome una con agua.", ["Vielen Dank Frau Wagner.", "Wie oft am Tag?"]),
                 ("Keine Sorge, das hilft schnell. Gute Besserung und auf Wiedersehen!", "¡No se preocupe, esto alivia rápido. Que se mejore y hasta luego!", ["Danke sehr, auf Wiedersehen!", "Tschüss!"]),
             ],
+            "Max": [
+                ("Hallo! Schön dich zu treffen! Worüber möchtest du heute sprechen?", "¡Hola! ¡Qué gusto conocerte! ¿De qué te gustaría hablar hoy?", ["Ich möchte über Musik sprechen.", "Über mein Wochenende!"]),
+                ("Echt cool! Und was machst du am liebsten in deiner Freizeit?", "¡Qué genial! ¿Y qué es lo que más te gusta hacer en tu tiempo libre?", ["Ich höre gern Musik.", "Ich gehe gern spazieren."]),
+                ("Wie spannend! Musik und Freizeit sind super. Erzähl mir mehr darüber!", "¡Qué interesante! La música y el tiempo libre son geniales. ¡Cuéntame más sobre eso!", ["Ich mag Rockmusik.", "Am Wochenende koche ich gern."]),
+                ("Das klingt fantastisch! Hat super viel Spaß gemacht, mit dir zu quatschen. Bis zum nächsten Mal!", "¡Eso suena fantástico! Fue muy divertido charlar contigo. ¡Hasta la próxima!", ["Danke Max, bis bald!", "Tschüss!"]),
+            ],
         }
 
         scenario_flows_en = {
@@ -515,6 +521,12 @@ class GeminiCoachService:
                 ("I see. Do you also have a fever?", "Ya veo. ¿Tienes también fiebre?", ["No, no fever.", "Yes, a little bit."]),
                 ("Here is some mild medicine for the headache. Take one tablet with water.", "Aquí tienes medicina suave para el dolor de cabeza. Toma una pastilla con agua.", ["Thank you doctor.", "How many times a day?"]),
                 ("Take care now, drink plenty of water, and get well soon!", "¡Cuídate, bebe mucha agua y que te mejores pronto!", ["Thank you, doctor!", "Goodbye!"]),
+            ],
+            "Alex": [
+                ("Hey there! Great to meet you! What would you like to chat about today?", "¡Hola! ¡Qué gusto conocerte! ¿De qué te gustaría hablar hoy?", ["I'd like to talk about music.", "About my weekend!"]),
+                ("That's awesome! What do you like doing in your free time?", "¡Qué genial! ¿Qué te gusta hacer en tu tiempo libre?", ["I like listening to music.", "I enjoy watching movies."]),
+                ("Sounds really cool! Tell me more about your favorite hobbies!", "¡Suena genial! ¡Cuéntame más sobre tus pasatiempos favoritos!", ["I like cooking on weekends.", "I enjoy sports."]),
+                ("That's brilliant! It was really fun chatting with you today. Catch you later, mate!", "¡Brillante! Fue muy divertido charlar contigo hoy. ¡Nos vemos luego!", ["Thanks Alex, see you!", "Bye Alex!"]),
             ],
         }
 
