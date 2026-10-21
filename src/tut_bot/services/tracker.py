@@ -529,7 +529,13 @@ class ProgressTracker:
             next_unit_num = unit_num + 1
             next_unit_id = f"unit_{next_unit_num}" if next_unit_num <= total_units else None
 
-            all_units_done = len(completed_units) >= total_units
+            # CRÍTICO PEDAGÓGICO:
+            # Solo se transiciona a READY_FOR_FINAL_EXAM si:
+            # 1. Se completaron efectivamente al menos las 6 unidades oficiales del nivel.
+            # 2. Se culminó la última unidad temática (unit_6, next_unit_id is None), O se entrenó en modo 'all'.
+            # Si el alumno acaba de completar unit_1..unit_5, SIEMPRE debe transicionar a UNIT_COMPLETED
+            # para ofrecerle pasar a la siguiente unidad (next_unit_id) sin saltarse el orden temático.
+            all_units_done = (len(completed_units) >= total_units) and (next_unit_id is None)
 
             if all_units_done:
                 self.set_fsm_state(user_id, "READY_FOR_FINAL_EXAM")
@@ -655,7 +661,7 @@ class ProgressTracker:
                     completed_exercises = '[]',
                     unlocked_levels = '["A1"]',
                     passed_levels = '[]',
-                    active_unit = 'all',
+                    active_unit = 'unit_1',
                     completed_units = '[]',
                     updated_at = ?
                 WHERE user_id = ?

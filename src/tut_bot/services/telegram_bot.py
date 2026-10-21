@@ -1844,12 +1844,19 @@ class TelegramCoachBot:
         elif data == "ex_next":
             state = tracker.get_user_state(user_id)
             active_unit = state.get("active_unit", "all")
+            skill_mode = state.get("skill_mode", "speaking")
             exercises = get_exercises(
                 language=state["language"],
                 level=state.get("level", "A1"),
-                skill_type=state.get("skill_mode", "speaking"),
+                skill_type=skill_mode,
                 unit_id=active_unit,
             )
+            if not exercises:
+                exercises = get_exercises(
+                    language=state["language"],
+                    level=state.get("level", "A1"),
+                    skill_type=skill_mode,
+                )
             if not exercises:
                 exercises = get_exercises(language=state["language"])
 
@@ -1883,17 +1890,18 @@ class TelegramCoachBot:
         elif data == "ex_prev":
             state = tracker.get_user_state(user_id)
             active_unit = state.get("active_unit", "all")
+            skill_mode = state.get("skill_mode", "speaking")
             exercises = get_exercises(
                 language=state["language"],
                 level=state.get("level", "A1"),
-                skill_type=state.get("skill_mode", "speaking"),
+                skill_type=skill_mode,
                 unit_id=active_unit,
             )
             if not exercises:
                 exercises = get_exercises(
                     language=state["language"],
                     level=state.get("level", "A1"),
-                    skill_type=state.get("skill_mode", "speaking"),
+                    skill_type=skill_mode,
                 )
             if not exercises:
                 exercises = get_exercises(language=state["language"])

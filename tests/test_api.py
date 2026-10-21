@@ -783,6 +783,31 @@ def test_tts_endpoint_and_static_ui_parity():
     assert res_tts.status_code in (200, 503)
 
 
+def test_fsm_unit_completed_does_not_skip_to_final_exam_prematurely():
+    """Valida que completar la unidad 1 nunca salte prematuramente a la evaluación final, incluso con unidades previas."""
+    import uuid
+    from tut_bot.services.tracker import tracker
+
+    user_id = f"test_no_premature_skip_{uuid.uuid4().hex[:8]}"
+    tracker.set_user_language(user_id, "de-DE")
+    tracker.set_user_level(user_id, "A1")
+    tracker.set_user_skill_mode(user_id, "writing")
+
+    # Simular que el usuario ya tenía unidades marcadas (por ejemplo de pruebas previas)
+    for u in range(1, 7):
+        tracker.mark_unit_completed(user_id, "de-DE", "A1", f"unit_{u}")
+
+    # Ahora el usuario entrena la Unidad 1 en modo escritura y completa sus ejercicios
+    res = tracker.advance_exercise_fsm(
+        user_id, total_exercises=1, current_unit_id="unit_1", require_all_units=True
+    )
+
+    # Debe ser 'unit_completed' guiando hacia 'unit_2', NUNCA 'ready_for_final_exam'
+    assert res["status"] == "unit_completed"
+    assert res["completed_unit"] == "unit_1"
+    assert res["next_unit"] == "unit_2"
+
+
 if __name__ == "__main__":
     test_health_endpoint()
     test_exercises_endpoints()
